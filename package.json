@@ -1,0 +1,36 @@
+{
+  "name": "obsidian-dashboard-hub",
+  "version": "0.1.0",
+  "description": "Shared dashboards, timelines, calendars, kanban boards, memos, bases, and secrets for Obsidian",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "obsidian",
+    "dashboard",
+    "calendar",
+    "kanban",
+    "timeline"
+  ],
+  "author": "takeshy",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "esbuild": "^0.28.1",
+    "obsidian": "^1.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18",
+    "yaml": "^2.9.0"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "lucide-react": "^0.503.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

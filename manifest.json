@@ -1,0 +1,10 @@
+{
+  "id": "dashboard-hub",
+  "name": "Dashboard Hub",
+  "minAppVersion": "1.10.0",
+  "description": "Shared dashboards, timelines, calendars, kanban boards, memos, bases, and secrets.",
+  "author": "takeshy",
+  "authorUrl": "https://github.com/takeshy",
+  "isDesktopOnly": false,
+  "version": "0.1.0"
+}
