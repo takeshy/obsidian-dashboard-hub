@@ -44,8 +44,9 @@ export function workflowCachePath(dashboardPath: string, baseDirectory = DASHBOA
 async function loadCacheFile(app: App, dashboardPath: string, baseDirectory = DASHBOARD_FOLDER): Promise<Record<string, WorkflowCacheRecord>> {
   const path = workflowCachePath(dashboardPath, baseDirectory);
   try {
-    if (!(await app.vault.adapter.exists(path))) return {};
-    return JSON.parse(await app.vault.adapter.read(path)) as Record<string, WorkflowCacheRecord>;
+    const file = app.vault.getFileByPath(path);
+    if (!file) return {};
+    return JSON.parse(await app.vault.cachedRead(file)) as Record<string, WorkflowCacheRecord>;
   } catch {
     return {};
   }
@@ -116,7 +117,21 @@ export async function saveWidgetCache(
       const caches = await loadCacheFile(app, dashboardPath, baseDirectory);
       caches[widgetId] = record;
       await ensureVaultFolder(app.vault, `${baseDirectory}/Data`);
-      await app.vault.adapter.write(path, JSON.stringify(caches, null, 2));
+      const content = JSON.stringify(caches, null, 2);
+      const existing = app.vault.getFileByPath(path);
+      if (existing) {
+        await app.vault.modify(existing, content);
+      } else {
+        try {
+          await app.vault.create(path, content);
+        } catch (error) {
+          // Another view may have created the shared cache between our lookup
+          // and create call. Resolve that race through the Vault API as well.
+          const created = app.vault.getFileByPath(path);
+          if (!created) throw error;
+          await app.vault.modify(created, content);
+        }
+      }
     });
   saveQueues.set(path, next);
   try {

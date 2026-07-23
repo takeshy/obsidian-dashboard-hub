@@ -103,7 +103,7 @@ async function uniqueKanbanPath(vault: Vault, baseName: string, folder: string):
   const base = sanitizeFileBase(baseName);
   let path = `${folder}/${base}${KANBAN_EXT}`;
   let index = 2;
-  while (vault.getAbstractFileByPath(path) || await vault.adapter.exists(path)) {
+  while (vault.getAbstractFileByPath(path)) {
     path = `${folder}/${base} ${index++}${KANBAN_EXT}`;
   }
   return path;
@@ -157,25 +157,18 @@ export async function ensureVaultFolder(vault: Vault, folderPath: string): Promi
   const normalized = folderPath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
   if (!normalized) return;
 
-  const adapterPathIsFolder = async (path: string): Promise<boolean> => {
-    const stat = await vault.adapter.stat(path);
-    return stat?.type === "folder";
-  };
-
   let current = "";
   for (const segment of normalized.split("/").filter(Boolean)) {
     current = current ? `${current}/${segment}` : segment;
     const existing = vault.getAbstractFileByPath(current);
     if (existing instanceof TFolder) continue;
     if (existing) throw new Error(`Path exists and is not a folder: ${current}`);
-    if (await adapterPathIsFolder(current)) continue;
     try {
       await vault.createFolder(current);
-    } catch {
-      const afterRace = vault.getAbstractFileByPath(current);
-      if (!(afterRace instanceof TFolder) && !(await adapterPathIsFolder(current))) {
-        throw new Error(`Failed to create folder: ${current}`);
-      }
+    } catch (error) {
+      // A concurrent Vault operation may have created it after our lookup.
+      // Re-check through the public Vault API rather than the adapter.
+      if (!vault.getFolderByPath(current)) throw error;
     }
   }
 }
