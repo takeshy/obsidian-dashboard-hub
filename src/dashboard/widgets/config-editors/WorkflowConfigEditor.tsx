@@ -246,7 +246,8 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
         <input
           type="number"
           min={0}
-          value={cfg.refreshInterval ?? 0}
+          value={cfg.refreshInterval || ""}
+          placeholder="0"
           onChange={(e) => {
             const n = Number(e.target.value);
             update({ refreshInterval: Number.isFinite(n) && n > 0 ? n : 0 });

@@ -2970,7 +2970,8 @@
 .llm-hub-launcher-body.is-tool > .llm-hub-db-calendar,
 .llm-hub-launcher-body.is-tool > .llm-hub-db-memolist,
 .llm-hub-launcher-body.is-tool > .llm-hub-db-kanban-wrap,
-.llm-hub-launcher-body.is-tool > .llm-hub-db-secret-manager {
+.llm-hub-launcher-body.is-tool > .llm-hub-db-secret-manager,
+.llm-hub-launcher-body.is-tool > .llm-hub-launcher-workflows {
   height: 100%;
   min-height: 0;
 }
@@ -3102,6 +3103,64 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.llm-hub-launcher-workflows {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(220px, 32%) minmax(0, 1fr);
+  gap: 10px;
+}
+.llm-hub-launcher-workflow-list,
+.llm-hub-launcher-workflow-output {
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+}
+.llm-hub-launcher-workflow-list {
+  padding: 6px;
+}
+.llm-hub-launcher-workflow-list > button {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-normal);
+  text-align: left;
+  box-shadow: none;
+}
+.llm-hub-launcher-workflow-list > button:hover,
+.llm-hub-launcher-workflow-list > button.is-active {
+  background: var(--background-modifier-hover);
+}
+.llm-hub-launcher-workflow-list > button > svg {
+  flex: 0 0 18px;
+  color: var(--interactive-accent);
+}
+.llm-hub-launcher-workflow-list > button > span {
+  min-width: 0;
+}
+.llm-hub-launcher-workflow-list strong,
+.llm-hub-launcher-workflow-list small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.llm-hub-launcher-workflow-list small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+.llm-hub-launcher-workflow-output {
+  padding: 14px;
+}
 .llm-hub-launcher-dashboard-list small {
   margin-top: 3px;
   color: var(--text-muted);
@@ -3136,5 +3195,9 @@
     height: 40px;
     min-width: 40px;
     flex-basis: 40px;
+  }
+  .llm-hub-launcher-workflows {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(120px, 36%) minmax(0, 1fr);
   }
 }

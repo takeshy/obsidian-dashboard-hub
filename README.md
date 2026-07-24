@@ -27,8 +27,8 @@ an API key, or an external database.
 - **Keep ownership of your data.** Dashboards are readable YAML; Timeline posts,
   memos, Kanban definitions, and encrypted secrets live as files in your vault.
   There is no proprietary database to migrate or service to keep running.
-- **Use tools on their own, too.** The launcher opens Timeline, Calendar,
-  Kanban, MemoList, and Secret Manager even when you do not need a full
+- **Use tools on their own, too.** The launcher opens Workflows, Timeline,
+  Calendar, Kanban, MemoList, and Secret Manager even when you do not need a full
   dashboard.
 
 ![Rearranging widgets on a dashboard](docs/images/dashboard-arrange.gif)
@@ -80,6 +80,23 @@ Dashboards/
 Secret Manager uses `.encrypted` files under `Secrets/` by default. Each file
 contains its own password-protected private key and salt, so the password is all
 you need to unlock it. Changing the Base directory does not move existing files.
+
+## Optional: add AI
+
+Dashboard Hub is fully usable on its own. If you also install a compatible
+Obsidian plugin, it can add AI actions without taking ownership of your
+dashboards. Search for **Gemini Helper** or **Local LLM Hub** in Obsidian's
+Community plugins to install one of them.
+
+Connected plugins can answer questions about a selection or reading memo,
+generate or edit a Base, rewrite a Timeline post, and create, edit, or run
+Workflows. Dashboard Hub keeps the model picker, cancellation, validation,
+before/after review, and Apply flow; the connected plugin supplies the models
+and executes the request.
+
+**[LLM Hub](https://github.com/takeshy/obsidian-llm-hub)** is also supported.
+It is not distributed through Obsidian's Community plugins; install it
+separately from its GitHub repository.
 
 ## Install from source
 
