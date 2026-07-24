@@ -32,6 +32,7 @@ export class AiGenerationModal extends Modal {
   }
 
   async onOpen(): Promise<void> {
+    this.modalEl.addClass("llm-hub-db-ai-modal-host");
     this.contentEl.empty();
     this.contentEl.addClass("llm-hub-db-ai-modal");
     this.contentEl.createEl("h2", { text: this.options.title });
@@ -170,6 +171,7 @@ export class AiGenerationModal extends Modal {
 
   onClose(): void {
     this.abort?.abort();
+    this.modalEl.removeClass("llm-hub-db-ai-modal-host");
     this.contentEl.empty();
   }
 }
