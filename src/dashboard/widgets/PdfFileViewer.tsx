@@ -28,13 +28,75 @@ export interface PdfFileViewerHandle {
 }
 
 interface PdfPageSlot {
-  page: any | null;
+  page: PdfPageProxy | null;
   wrapper: HTMLDivElement;
   canvas: HTMLCanvasElement;
   textLayer: HTMLDivElement;
   scale: number;
   rendering: boolean;
   textTask?: { cancel?: () => void };
+}
+
+interface PdfViewport {
+  width: number;
+  height: number;
+  scale: number;
+}
+
+interface PdfRenderTask {
+  promise: Promise<void>;
+}
+
+interface PdfPageProxy {
+  getViewport: (options: { scale: number }) => PdfViewport;
+  streamTextContent: (options: { includeMarkedContent: boolean }) => unknown;
+  getTextContent: (options: { includeMarkedContent: boolean }) => Promise<unknown>;
+  render: (options: {
+    canvas: HTMLCanvasElement;
+    canvasContext: CanvasRenderingContext2D;
+    viewport: PdfViewport;
+    transform?: number[];
+  }) => PdfRenderTask;
+}
+
+interface PdfDocumentProxy {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<PdfPageProxy>;
+}
+
+interface PdfLoadingTask {
+  promise: Promise<PdfDocumentProxy>;
+  destroy: () => Promise<void>;
+}
+
+interface PdfTextLayerTask {
+  render: () => Promise<void>;
+  cancel?: () => void;
+}
+
+interface PdfLegacyTextLayerTask {
+  promise?: Promise<void>;
+  cancel?: () => void;
+}
+
+interface PdfJsApi {
+  getDocument: (options: { data: Uint8Array }) => PdfLoadingTask;
+  TextLayer?: new (options: {
+    textContentSource: unknown;
+    container: HTMLDivElement;
+    viewport: PdfViewport;
+  }) => PdfTextLayerTask;
+  renderTextLayer?: (options: {
+    textContentSource: unknown;
+    container: HTMLDivElement;
+    viewport: PdfViewport;
+  }) => PdfLegacyTextLayerTask;
+}
+
+async function loadTypedPdfJs(): Promise<PdfJsApi> {
+  const loaded: unknown = await loadPdfJs();
+  if (!loaded || typeof loaded !== "object") throw new Error("PDF.js did not load");
+  return loaded as PdfJsApi;
 }
 
 function selectionFrom(root: Node, win: Window): { text: string; anchor?: PdfQuoteAnchor } {
@@ -79,24 +141,30 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
   const hostRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef(new Map<number, PdfPageSlot>());
   const generationRef = useRef(0);
-  const renderPageRef = useRef<(page: number) => Promise<void>>(async () => undefined);
+  const renderPageRef = useRef<(page: number) => Promise<void>>(() => Promise.resolve());
   const [error, setError] = useState("");
 
-  const getScale = useCallback((page: any) => {
+  const getScale = useCallback((page: PdfPageProxy) => {
     const host = hostRef.current;
     const width = page.getViewport({ scale: 1 }).width || 1;
     return Math.max(0.2, ((host?.clientWidth ?? width) - 24) / width);
   }, []);
 
-  const renderTextLayer = useCallback(async (pdfjs: any, slot: PdfPageSlot, viewport: any) => {
+  const renderTextLayer = useCallback(async (
+    pdfjs: PdfJsApi,
+    slot: PdfPageSlot,
+    page: PdfPageProxy,
+    viewport: PdfViewport,
+  ) => {
     slot.textTask?.cancel?.();
     slot.textLayer.replaceChildren();
     slot.textLayer.style.setProperty("--scale-factor", String(viewport.scale));
     slot.textLayer.style.setProperty("--total-scale-factor", String(viewport.scale));
 
-    if (pdfjs.TextLayer) {
-      const task = new pdfjs.TextLayer({
-        textContentSource: slot.page.streamTextContent({ includeMarkedContent: true }),
+    const TextLayer = pdfjs.TextLayer;
+    if (TextLayer) {
+      const task = new TextLayer({
+        textContentSource: page.streamTextContent({ includeMarkedContent: true }),
         container: slot.textLayer,
         viewport,
       });
@@ -105,13 +173,15 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
       return;
     }
 
-    const task = pdfjs.renderTextLayer({
-      textContentSource: await slot.page.getTextContent({ includeMarkedContent: true }),
+    const legacyRender = pdfjs.renderTextLayer;
+    if (!legacyRender) throw new Error("PDF.js text-layer API is unavailable");
+    const task = legacyRender({
+      textContentSource: await page.getTextContent({ includeMarkedContent: true }),
       container: slot.textLayer,
       viewport,
     });
     slot.textTask = task;
-    await (task.promise ?? task);
+    if (task.promise) await task.promise;
   }, []);
 
   useEffect(() => {
@@ -120,7 +190,7 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
     const generation = ++generationRef.current;
     let observer: IntersectionObserver | null = null;
     let resizeObserver: ResizeObserver | null = null;
-    let loadingTask: { destroy?: () => Promise<void> } | null = null;
+    let loadingTask: PdfLoadingTask | null = null;
     let resizeTimer = 0;
     setError("");
     host.replaceChildren();
@@ -129,12 +199,12 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
     void (async () => {
       try {
         const [pdfjs, buffer] = await Promise.all([
-          loadPdfJs(),
+          loadTypedPdfJs(),
           ctx.app.vault.readBinary(file),
         ]);
         if (generation !== generationRef.current) return;
         loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
-        const pdf = await (loadingTask as any).promise;
+        const pdf = await loadingTask.promise;
         if (generation !== generationRef.current) return;
 
         const firstPage = await pdf.getPage(1);
@@ -142,16 +212,16 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
         const scale = getScale(firstPage);
         const viewport = firstPage.getViewport({ scale });
         for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-          const wrapper = document.createElement("div");
-          wrapper.className = "llm-hub-db-pdf-page";
-          wrapper.dataset.pdfPage = String(pageNumber);
-          wrapper.style.width = `${Math.floor(viewport.width)}px`;
-          wrapper.style.height = `${Math.floor(viewport.height)}px`;
-          const canvas = document.createElement("canvas");
-          const textLayer = document.createElement("div");
-          textLayer.className = "llm-hub-db-pdf-text-layer";
-          wrapper.append(canvas, textLayer);
-          host.appendChild(wrapper);
+          const wrapper = host.createDiv({
+            cls: "llm-hub-db-pdf-page",
+            attr: { "data-pdf-page": String(pageNumber) },
+          });
+          wrapper.setCssProps({
+            width: `${Math.floor(viewport.width)}px`,
+            height: `${Math.floor(viewport.height)}px`,
+          });
+          const canvas = wrapper.createEl("canvas");
+          const textLayer = wrapper.createDiv({ cls: "llm-hub-db-pdf-text-layer" });
           pagesRef.current.set(pageNumber, {
             page: pageNumber === 1 ? firstPage : null,
             wrapper,
@@ -174,12 +244,16 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
             if (Math.abs(slot.scale - scale) < 0.001 && slot.textLayer.childElementCount) return;
             const viewport = page.getViewport({ scale });
             const dpr = Math.min(3, window.devicePixelRatio || 1);
-            slot.wrapper.style.width = `${Math.floor(viewport.width)}px`;
-            slot.wrapper.style.height = `${Math.floor(viewport.height)}px`;
+            slot.wrapper.setCssProps({
+              width: `${Math.floor(viewport.width)}px`,
+              height: `${Math.floor(viewport.height)}px`,
+            });
             slot.canvas.width = Math.floor(viewport.width * dpr);
             slot.canvas.height = Math.floor(viewport.height * dpr);
-            slot.canvas.style.width = `${Math.floor(viewport.width)}px`;
-            slot.canvas.style.height = `${Math.floor(viewport.height)}px`;
+            slot.canvas.setCssProps({
+              width: `${Math.floor(viewport.width)}px`,
+              height: `${Math.floor(viewport.height)}px`,
+            });
             const context = slot.canvas.getContext("2d");
             if (!context) return;
             await page.render({
@@ -189,7 +263,7 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
               transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
             }).promise;
             if (generation !== generationRef.current) return;
-            await renderTextLayer(pdfjs, slot, viewport);
+            await renderTextLayer(pdfjs, slot, page, viewport);
             slot.scale = scale;
             onRenderTick?.();
           } catch (renderError) {
@@ -240,7 +314,7 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
       resizeObserver?.disconnect();
       pagesRef.current.forEach((slot) => slot.textTask?.cancel?.());
       pagesRef.current.clear();
-      void loadingTask?.destroy?.();
+      if (loadingTask) void loadingTask.destroy();
       host.replaceChildren();
     };
   }, [ctx.app, file, getScale, onRenderTick, renderTextLayer]);

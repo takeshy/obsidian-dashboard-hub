@@ -99,7 +99,7 @@ function sanitizeFileBase(name: string): string {
     .trim() || "Board";
 }
 
-async function uniqueKanbanPath(vault: Vault, baseName: string, folder: string): Promise<string> {
+function uniqueKanbanPath(vault: Vault, baseName: string, folder: string): string {
   const base = sanitizeFileBase(baseName);
   let path = `${folder}/${base}${KANBAN_EXT}`;
   let index = 2;
@@ -117,7 +117,7 @@ export async function createKanbanFileFromConfig(
 ): Promise<string> {
   const folder = `${baseDirectory}/Kanbans`;
   await ensureVaultFolder(vault, folder);
-  const path = await uniqueKanbanPath(vault, trimString(config.title) || fallbackName, folder);
+  const path = uniqueKanbanPath(vault, trimString(config.title) || fallbackName, folder);
   await vault.create(path, serializeKanbanFile(kanbanDefinitionFromConfig(config)));
   return path;
 }

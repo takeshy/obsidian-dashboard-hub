@@ -14,6 +14,24 @@
   overflow: hidden;
   background: var(--background-primary);
 }
+.llm-hub-kanban-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--background-primary);
+}
+.llm-hub-kanban-view-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.llm-hub-kanban-view-body > .llm-hub-db-kanban-wrap {
+  height: 100%;
+}
+.llm-hub-db-panel-footer.is-end {
+  justify-content: flex-end;
+}
 
 /* Toolbar */
 .llm-hub-db-toolbar {
@@ -178,52 +196,64 @@
   z-index: 20;
 }
 
-/* Cell controls (edit mode) */
-.llm-hub-db-drag {
+/* Floating widget controls */
+.llm-hub-db-floating-menu {
   position: absolute;
-  top: 0;
+  z-index: 24;
+  top: 4px;
   left: 50%;
-  width: 48px;
-  height: 26px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--background-secondary) 92%, transparent);
+  box-shadow: var(--shadow-s);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.llm-hub-db-cell:hover .llm-hub-db-floating-menu,
+.llm-hub-db-cell.is-active .llm-hub-db-floating-menu,
+.llm-hub-db-floating-menu:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+.llm-hub-db-floating-menu-mover {
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: grab;
-  transform: translateX(-50%);
-  background: var(--background-secondary);
-  border: 1px solid var(--background-modifier-border);
-  border-top: none;
-  border-radius: 0 0 6px 6px;
+  width: 14px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-faint);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 12;
-  transition: opacity 0.15s ease;
+  cursor: move;
+  touch-action: none;
+  box-shadow: none;
 }
-.llm-hub-db-drag:active {
-  cursor: grabbing;
+.llm-hub-db-floating-menu-mover:hover {
+  color: var(--text-muted);
 }
-.llm-hub-db-cell:hover .llm-hub-db-drag {
-  opacity: 1;
-  pointer-events: auto;
-}
-.llm-hub-db-cell:focus-within .llm-hub-db-drag {
-  opacity: 0;
-  pointer-events: none;
-}
-.is-mobile .llm-hub-db-cell[data-widget-type="file"]:focus-within .llm-hub-db-drag {
-  opacity: 1;
-  pointer-events: auto;
-}
-.llm-hub-db-actions {
-  position: absolute;
-  top: 2px;
-  right: 4px;
+.llm-hub-db-floating-menu-tools {
   display: flex;
   align-items: center;
-  gap: 2px;
-  z-index: 10;
-  opacity: 1;
+  gap: 0;
+}
+.llm-hub-db-floating-menu .llm-hub-db-iconbtn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+}
+.llm-hub-db-widget-mover {
+  cursor: grab;
+  touch-action: none;
+}
+.llm-hub-db-widget-mover:active {
+  cursor: grabbing;
 }
 .llm-hub-db-iconbtn {
   display: inline-flex;
@@ -264,6 +294,14 @@
 .llm-hub-db-cell:focus-within .llm-hub-db-resize {
   opacity: 0;
   pointer-events: none;
+}
+@media (pointer: coarse) {
+  .llm-hub-db-floating-menu,
+  .llm-hub-db-resize,
+  .llm-hub-db-cell:focus-within .llm-hub-db-resize {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* Widget bodies */
@@ -402,6 +440,9 @@
   overflow: auto;
   user-select: text;
   -webkit-user-select: text;
+}
+.llm-hub-db-file-content.is-memo-hit {
+  cursor: pointer;
 }
 .llm-hub-db-file-editor {
   display: flex;

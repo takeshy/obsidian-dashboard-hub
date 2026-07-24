@@ -1057,7 +1057,7 @@ function serializeBaseFilter(combinator: Combinator, terms: BaseTerm[]): FilterN
   const nodes = terms.map(termToNode);
   if (nodes.length === 0) return undefined;
   if (nodes.length === 1) return nodes[0];
-  return { [combinator]: nodes } as FilterNode;
+  return { [combinator]: nodes };
 }
 
 function rawNodeToText(node: FilterNode): string {

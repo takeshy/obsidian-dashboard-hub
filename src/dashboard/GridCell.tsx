@@ -47,6 +47,14 @@ export default function GridCell({
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const pointerRef = useRef<{ id: number; target: HTMLElement } | null>(null);
   const [snapPreview, setSnapPreview] = useState<LayoutPos | null>(null);
+  const [chromeOffset, setChromeOffset] = useState({ x: 0, y: 0 });
+  const chromeDragRef = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
 
   const isActive = interactionMode !== null;
   const layoutHandlesEnabled = !isMaximized;
@@ -150,6 +158,42 @@ export default function GridCell({
     [cellW, cellH, pos, grid.gap],
   );
 
+  const handleChromePointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    chromeDragRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      originX: chromeOffset.x,
+      originY: chromeOffset.y,
+    };
+  }, [chromeOffset]);
+
+  const handleChromePointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const dragging = chromeDragRef.current;
+    if (!dragging || dragging.pointerId !== event.pointerId) return;
+    const cellRect = event.currentTarget.closest(".llm-hub-db-cell")?.getBoundingClientRect();
+    const chromeRect = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!cellRect || !chromeRect) return;
+    const maxX = Math.max(0, (cellRect.width - chromeRect.width) / 2);
+    const maxY = Math.max(-4, cellRect.height - chromeRect.height - 4);
+    setChromeOffset({
+      x: Math.max(-maxX, Math.min(maxX, dragging.originX + event.clientX - dragging.x)),
+      y: Math.max(-4, Math.min(maxY, dragging.originY + event.clientY - dragging.y)),
+    });
+  }, []);
+
+  const finishChromeDrag = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const dragging = chromeDragRef.current;
+    if (!dragging || dragging.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    chromeDragRef.current = null;
+  }, []);
+
   const transformStyle = transform
     ? `translate(${transform.dx}px, ${transform.dy}px)`
     : undefined;
@@ -185,18 +229,22 @@ export default function GridCell({
           <WidgetRenderer widget={widget} ctx={ctx} />
         </div>
 
-        {layoutHandlesEnabled && (
-          <div
-            onPointerDown={handleDragPointerDown}
-            className="llm-hub-db-drag"
-            style={{ touchAction: "none" }}
-            title={t("dashboard.dragToMove")}
+        <div
+          className="llm-hub-db-floating-menu"
+          style={{ transform: `translateX(-50%) translate(${chromeOffset.x}px, ${chromeOffset.y}px)` }}
+        >
+          <button
+            type="button"
+            className="llm-hub-db-floating-menu-mover"
+            onPointerDown={handleChromePointerDown}
+            onPointerMove={handleChromePointerMove}
+            onPointerUp={finishChromeDrag}
+            onPointerCancel={finishChromeDrag}
+            title={t("dashboard.moveToolbar")}
           >
-            <GripVertical size={14} />
-          </div>
-        )}
-
-        <div className="llm-hub-db-actions">
+            <GripVertical size={10} />
+          </button>
+          <div className="llm-hub-db-floating-menu-tools">
             {onToggleMaximize && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -210,19 +258,30 @@ export default function GridCell({
                 {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
               </button>
             )}
-          {onSettings && (
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSettings();
-              }}
-              className="llm-hub-db-iconbtn"
-              title={t("dashboard.settings")}
-            >
-              <Settings size={12} />
-            </button>
-          )}
+            {onSettings && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSettings();
+                }}
+                className="llm-hub-db-iconbtn"
+                title={t("dashboard.settings")}
+              >
+                <Settings size={12} />
+              </button>
+            )}
+            {layoutHandlesEnabled && (
+              <button
+                type="button"
+                onPointerDown={handleDragPointerDown}
+                className="llm-hub-db-iconbtn llm-hub-db-widget-mover"
+                title={t("dashboard.dragToMove")}
+              >
+                <GripVertical size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         {layoutHandlesEnabled && (

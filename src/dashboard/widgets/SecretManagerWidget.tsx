@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode, type SyntheticEvent } from "react";
 import { ChevronDown, ChevronRight, Copy, Eye, ExternalLink, FileKey2, Folder, KeyRound, Loader2, Pencil, Plus, Search, X } from "lucide-react";
 import { Notice, TFile } from "obsidian";
 import { t } from "src/i18n";
@@ -235,7 +235,7 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
     }
   }, [ctx]);
 
-  const createSecret = useCallback(async (event: FormEvent) => {
+  const createSecret = useCallback(async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!ctx || !createPassword) return;
     setSaving(true);
@@ -449,7 +449,7 @@ function SecretViewDialog({
     return () => { cancelled = true; };
   }, [ctx, entry.file]);
 
-  const unlock = async (event: FormEvent) => {
+  const unlock = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!password || !encryptedContent) return;
     setBusy(true);
@@ -488,7 +488,7 @@ function SecretViewDialog({
     setEditMode(true);
   };
 
-  const save = async (event: FormEvent) => {
+  const save = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     const currentPassword = cryptoCache.getPassword();
     if (!currentPassword || !unwrapEncryptedFile(encryptedContent)) {

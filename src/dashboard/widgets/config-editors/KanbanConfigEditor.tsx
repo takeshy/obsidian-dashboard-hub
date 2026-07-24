@@ -38,6 +38,10 @@ function normalizeDisplayFields(value: KanbanConfig["displayFields"]): KanbanDis
 
 const FILE_FIELD_NAMES = ["file.path", "file.name", "file.content", "file.mtime", "file.ctime"];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function fieldNamesFromVault(app: ConfigEditorProps["app"], folder: string, tag: string): string[] {
   const normalizedFolder = folder.trim().replace(/[/\\]+$/, "").toLocaleLowerCase();
   const folderPrefix = normalizedFolder ? `${normalizedFolder}/` : "";
@@ -46,8 +50,8 @@ function fieldNamesFromVault(app: ConfigEditorProps["app"], folder: string, tag:
   for (const file of app.vault.getMarkdownFiles()) {
     if (folderPrefix && !file.path.toLocaleLowerCase().startsWith(folderPrefix)) continue;
     const cache = app.metadataCache.getFileCache(file);
-    const frontmatter = cache?.frontmatter;
-    if (!frontmatter || typeof frontmatter !== "object") continue;
+    const frontmatter: unknown = cache?.frontmatter;
+    if (!isRecord(frontmatter)) continue;
     if (normalizedTag) {
       const tags = [
         ...(cache?.tags?.map((entry) => entry.tag) ?? []),
@@ -62,7 +66,13 @@ function fieldNamesFromVault(app: ConfigEditorProps["app"], folder: string, tag:
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
-export function KanbanConfigEditor({ config, onChange, app, plugin }: ConfigEditorProps) {
+export function KanbanConfigEditor({
+  config,
+  onChange,
+  app,
+  plugin,
+  hideFilePicker = false,
+}: ConfigEditorProps & { hideFilePicker?: boolean }) {
   const rawCfg = (config ?? {}) as KanbanConfig;
   const baseDirectory = plugin.settings.baseDirectory;
   const [fileCfg, setFileCfg] = useState<KanbanConfig | null>(null);
@@ -170,17 +180,19 @@ export function KanbanConfigEditor({ config, onChange, app, plugin }: ConfigEdit
 
   return (
     <div className="llm-hub-db-fields">
-      <div className="llm-hub-db-field">
-        <label>{t("dashboard.kanbanFile")}</label>
-        <FilePicker
-          value={rawCfg.kanban ?? ""}
-          paths={kanbanPaths}
-          onChange={(kanban) => onChange(kanban ? { kanban, cardOrder: rawCfg.cardOrder } : { cardOrder: rawCfg.cardOrder })}
-          placeholder={`${baseDirectory}/Kanbans/Tasks.kanban`}
-        />
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanFileHint").replace("Dashboards", baseDirectory)}</p>
-        {fileMissing && <p className="llm-hub-db-secret-error">{t("dashboard.kanbanFileError")}</p>}
-      </div>
+      {!hideFilePicker && (
+        <div className="llm-hub-db-field">
+          <label>{t("dashboard.kanbanFile")}</label>
+          <FilePicker
+            value={rawCfg.kanban ?? ""}
+            paths={kanbanPaths}
+            onChange={(kanban) => onChange(kanban ? { kanban, cardOrder: rawCfg.cardOrder } : { cardOrder: rawCfg.cardOrder })}
+            placeholder={`${baseDirectory}/Kanbans/Tasks.kanban`}
+          />
+          <p className="llm-hub-db-hint">{t("dashboard.kanbanFileHint").replace("Dashboards", baseDirectory)}</p>
+          {fileMissing && <p className="llm-hub-db-secret-error">{t("dashboard.kanbanFileError")}</p>}
+        </div>
+      )}
       <div className="llm-hub-db-field">
         <label>{t("dashboard.kanbanBoardTitle")}</label>
         <input

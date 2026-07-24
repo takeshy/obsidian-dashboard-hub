@@ -1,6 +1,6 @@
 {
   "name": "obsidian-dashboard-hub",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared dashboards, timelines, calendars, kanban boards, memos, bases, and secrets for Obsidian",
   "main": "main.js",
   "scripts": {

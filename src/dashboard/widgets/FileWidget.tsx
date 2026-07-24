@@ -192,8 +192,7 @@ function setCustomHighlights(win: Window, name: string, ranges: Range[]) {
 function ensureHighlightStyle(doc: Document, name: string) {
   const id = `llm-hub-db-memo-highlight-${name}`;
   if (doc.getElementById(id)) return;
-  const style = doc.createElement("style");
-  style.id = id;
+  const style = (doc.head ?? doc.documentElement).createEl("style", { attr: { id } });
   style.textContent = `
 ::highlight(${name}) {
   background-color: rgb(217 119 6 / 0.30);
@@ -202,7 +201,6 @@ function ensureHighlightStyle(doc: Document, name: string) {
   background-color: rgb(217 119 6 / 0.58);
 }
 `;
-  (doc.head ?? doc.documentElement).appendChild(style);
 }
 
 function fileKind(path: string): "markdown" | "text" | "html" | "image" | "pdf" | "epub" | "other" {
@@ -323,7 +321,7 @@ function HtmlFrame({
     // generated EPUB document with an empty about:srcdoc history entry in
     // Electron. Keep chapter/footnote links inside the already-built book and
     // scroll to their rewritten DOM target ourselves.
-    const onClick = (event: globalThis.MouseEvent) => {
+    const onClick = (event: MouseEvent) => {
       const frameWin = doc.defaultView;
       if (frameWin && onMemoClick?.(event.clientX, event.clientY, frameWin)) {
         event.preventDefault();
@@ -363,10 +361,10 @@ function HtmlFrame({
         event.clientX + (frameRect?.left ?? 0),
         event.clientY + (frameRect?.top ?? 0),
       ) ?? false;
-      doc.body.style.cursor = hit ? "pointer" : "";
+      doc.body.classList.toggle("llm-hub-db-memo-hit", hit);
     };
     const onPointerOut = () => {
-      doc.body.style.cursor = "";
+      doc.body.classList.remove("llm-hub-db-memo-hit");
       onMemoPointerLeave?.();
     };
     doc.addEventListener("pointermove", onPointerMove);
@@ -589,7 +587,7 @@ function MemoPanel({
       setKeyboardTarget(target);
     },
     onBlurCapture: (e: React.FocusEvent<HTMLDivElement>) => {
-      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      if (e.currentTarget.contains(e.relatedTarget)) return;
       // Delay unpinning: on iOS the blur lands between touch and click, and
       // moving the container mid-tap makes the tapped button miss its click.
       window.clearTimeout(keyboardBlurTimer.current);
@@ -1268,7 +1266,7 @@ export default function FileWidget({
   const handleHostMemoHover = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     if ((kind !== "pdf" && kind !== "markdown") || event.pointerType === "touch") return;
     const hit = showMemoHover(event.clientX, event.clientY, window);
-    event.currentTarget.style.cursor = hit ? "pointer" : "";
+    event.currentTarget.classList.toggle("is-memo-hit", hit);
   }, [kind, showMemoHover]);
 
   const handleHostMemoClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
@@ -1340,10 +1338,6 @@ export default function FileWidget({
 
   const header = showHeader && (
     <div className="llm-hub-db-file-header">
-      <span className="llm-hub-db-markdown-path" title={path}>{path}</span>
-      <button type="button" className="llm-hub-db-markdown-open" onClick={openFile} title={t("dashboard.kanbanOpenNote")}>
-        <ExternalLink size={14} />
-      </button>
       <button
         type="button"
         className={`llm-hub-db-markdown-open${memoPanelOpen ? " is-active" : ""}`}
@@ -1351,6 +1345,10 @@ export default function FileWidget({
         title={t("memo.panelToggle")}
       >
         <NotebookPen size={14} />
+      </button>
+      <span className="llm-hub-db-markdown-path" title={path}>{path}</span>
+      <button type="button" className="llm-hub-db-markdown-open" onClick={openFile} title={t("dashboard.kanbanOpenNote")}>
+        <ExternalLink size={14} />
       </button>
     </div>
   );
@@ -1454,7 +1452,7 @@ export default function FileWidget({
           onContextMenu={handleHostContextMenu}
           onPointerMove={handleHostMemoHover}
           onPointerLeave={(event) => {
-            event.currentTarget.style.cursor = "";
+            event.currentTarget.classList.remove("is-memo-hit");
             setMemoHover(null);
           }}
           onClick={handleHostMemoClick}

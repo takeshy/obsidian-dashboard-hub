@@ -3,18 +3,20 @@ import { X } from "lucide-react";
 import { listWidgetDefs } from "./widgets/registry";
 import type { WidgetDef } from "./types";
 import { t } from "src/i18n";
+import type { LlmHubPlugin } from "src/plugin";
 
 interface WidgetPaletteProps {
   onSelect: (def: WidgetDef) => void;
   onClose: () => void;
+  plugin: LlmHubPlugin;
 }
 
 /**
  * Modal palette showing all registered widget types. Selecting a type calls
  * onSelect with the WidgetDef.
  */
-export function WidgetPalette({ onSelect, onClose }: WidgetPaletteProps) {
-  const defs = listWidgetDefs();
+export function WidgetPalette({ onSelect, onClose, plugin }: WidgetPaletteProps) {
+  const defs = listWidgetDefs().filter((def) => def.type !== "workflow" || plugin.hasCapability("workflow"));
 
   const modal = (
     <div className="llm-hub-db-modal-overlay" onClick={onClose}>

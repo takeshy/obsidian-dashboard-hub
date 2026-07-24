@@ -5,9 +5,12 @@ import {
   Setting,
   TFile,
   type App,
+  type EventRef,
+  type SettingDefinitionItem,
 } from "obsidian";
 import { initLocale } from "src/i18n";
 import { DashboardView, DASHBOARD_VIEW_TYPE } from "src/ui/DashboardView";
+import { KanbanView, KANBAN_VIEW_TYPE } from "src/ui/KanbanView";
 import { ToolLauncherModal, type LauncherTool } from "src/ui/ToolLauncherModal";
 import {
   createEmptyDashboard,
@@ -104,14 +107,21 @@ export class DashboardHubPlugin extends Plugin {
     registerCoreWidgets();
 
     this.registerView(DASHBOARD_VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
+    this.registerView(KANBAN_VIEW_TYPE, (leaf) => new KanbanView(leaf, this));
     try {
       this.registerExtensions(["dashboard"], DASHBOARD_VIEW_TYPE);
     } catch (error) {
       console.error("Dashboard Hub: .dashboard is already registered. Disable dashboard ownership in the other Hub plugins.", error);
-      new Notice("Dashboard Hub could not register .dashboard because another plugin owns it.");
+      new Notice("Could not register .dashboard because another plugin owns it.");
+    }
+    try {
+      this.registerExtensions(["kanban"], KANBAN_VIEW_TYPE);
+    } catch (error) {
+      console.error("Dashboard Hub: .kanban is already registered by another plugin.", error);
+      new Notice("Could not register .kanban because another plugin owns it.");
     }
 
-    this.addRibbonIcon("rocket", "Open Dashboard Hub", () => new ToolLauncherModal(this).open());
+    this.addRibbonIcon("rocket", "Open dashboard hub", () => new ToolLauncherModal(this).open());
     this.addCommand({
       id: "open-launcher",
       name: "Open launcher",
@@ -237,7 +247,7 @@ export class DashboardHubPlugin extends Plugin {
   openChatWithDraft(draft: string): void {
     const integration = this.preferredIntegration("chat");
     if (!integration?.openChatWithDraft) {
-      new Notice("No AI plugin is connected to Dashboard Hub.");
+      new Notice("No AI plugin is connected.");
       return;
     }
     void integration.openChatWithDraft(draft);
@@ -246,7 +256,7 @@ export class DashboardHubPlugin extends Plugin {
   askChatAboutSelection(request: { text: string; sourcePath?: string }): void {
     const integration = this.preferredIntegration("chat");
     if (!integration?.askChatAboutSelection) {
-      new Notice("No AI plugin is connected to Dashboard Hub.");
+      new Notice("No AI plugin is connected.");
       return;
     }
     void integration.askChatAboutSelection(request);
@@ -302,16 +312,17 @@ export class DashboardHubPlugin extends Plugin {
 
   private registerIntegrationEvents(): void {
     const workspace = this.app.workspace as unknown as {
-      on: (name: string, callback: (value: unknown) => void) => { id: string };
-      offref: (ref: { id: string }) => void;
+      on: {
+        (name: "dashboard-hub:register-integration", callback: (value: DashboardAiIntegration) => void): EventRef;
+        (name: "dashboard-hub:unregister-integration", callback: (value: DashboardIntegrationUnregisterRequest) => void): EventRef;
+      };
     };
     this.registerEvent(workspace.on("dashboard-hub:register-integration", (value) => {
-      const integration = value as DashboardAiIntegration;
-      if (integration?.id && integration.name) this.registerIntegration(integration);
-    }) as never);
+      if (value?.id && value.name) this.registerIntegration(value);
+    }));
     this.registerEvent(workspace.on("dashboard-hub:unregister-integration", (value) => {
-      this.unregisterIntegration(value as DashboardIntegrationUnregisterRequest);
-    }) as never);
+      this.unregisterIntegration(value);
+    }));
   }
 
   private announceReady(): void {
@@ -321,9 +332,9 @@ export class DashboardHubPlugin extends Plugin {
 
   private registerSkillContributionEvents(): void {
     const workspace = this.app.workspace as unknown as {
-      on: (name: string, callback: () => void) => { id: string };
+      on: (name: string, callback: () => void) => EventRef;
     };
-    this.registerEvent(workspace.on(REQUEST_RUNTIME_SKILLS_EVENT, () => this.publishDashboardSkill()) as never);
+    this.registerEvent(workspace.on(REQUEST_RUNTIME_SKILLS_EVENT, () => this.publishDashboardSkill()));
   }
 
   private publishDashboardSkill(): void {
@@ -340,13 +351,34 @@ class DashboardHubSettingTab extends PluginSettingTab {
     super(app, dashboardPlugin);
   }
 
+  getSettingDefinitions(): SettingDefinitionItem<"baseDirectory">[] {
+    return [{
+      name: "Base directory",
+      desc: "Root folder for dashboards and their bases, kanbans, memos, timelines, and cached data. Changing it does not move existing files.",
+      control: {
+        type: "text",
+        key: "baseDirectory",
+        defaultValue: DASHBOARD_FOLDER,
+        placeholder: DASHBOARD_FOLDER,
+      },
+    }];
+  }
+
+  getControlValue(key: string): unknown {
+    return key === "baseDirectory" ? this.dashboardPlugin.settings.baseDirectory : undefined;
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    if (key === "baseDirectory" && typeof value === "string") {
+      await this.dashboardPlugin.setBaseDirectory(value);
+    }
+  }
+
   display(): void {
     this.containerEl.empty();
-    new Setting(this.containerEl).setName("Dashboard Hub").setHeading();
-
     new Setting(this.containerEl)
       .setName("Base directory")
-      .setDesc("Root folder for dashboards and their Bases, Kanbans, memos, Timelines, and cached data. Changing it does not move existing files.")
+      .setDesc("Root folder for dashboards and their bases, kanbans, memos, timelines, and cached data. Changing it does not move existing files.")
       .addText((textInput) => {
         textInput
           .setPlaceholder(DASHBOARD_FOLDER)

@@ -212,6 +212,7 @@ export function epubToHtml(bytes: Uint8Array, fileName: string): string {
       .epub-chapter h1 { font: 700 1.45rem/1.3 ui-sans-serif, system-ui, sans-serif; margin: 0 0 1rem; }
       img, svg, video { max-width: 100%; height: auto; }
       a { color: #0f766e; }
+      body.llm-hub-db-memo-hit { cursor: pointer; }
       pre { overflow: auto; padding: 1rem; background: #f0f3f7; }
     </style>
   </head>
