@@ -6,6 +6,7 @@ import { t } from "src/i18n";
 import type { WidgetContext } from "../types";
 import { memoPathFor, readMemos, writeMemos, type DocumentMemo } from "../memo";
 import { appendTimelineEntry } from "../timelineEvents";
+import { parseFileViewPosition, restoredScrollTop, type FileViewPosition } from "../fileViewPosition";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { generateId } from "src/utils/id";
 import PdfFileViewer, { type PdfFileViewerHandle } from "./PdfFileViewer";
@@ -40,6 +41,107 @@ interface MemoRange {
   range: Range;
   memos: DocumentMemo[];
   win: Window;
+}
+
+const VIEW_POSITION_SAVE_DELAY_MS = 350;
+
+function pdfPagePosition(target: HTMLElement): FileViewPosition["pdfPage"] {
+  const pages = Array.from(target.querySelectorAll<HTMLElement>("[data-pdf-page]"));
+  if (!pages.length) return undefined;
+  const top = target.scrollTop + 8;
+  let page = pages[0];
+  for (const candidate of pages) {
+    if (candidate.offsetTop > top) break;
+    page = candidate;
+  }
+  return {
+    page: Number(page.dataset.pdfPage) || 1,
+    offset: Math.max(0, Math.min(1, (top - page.offsetTop) / Math.max(1, page.offsetHeight))),
+  };
+}
+
+function nodePath(root: Node, node: Node): number[] | null {
+  const path: number[] = [];
+  let current: Node | null = node;
+  while (current && current !== root) {
+    const parent: Node | null = current.parentNode;
+    if (!parent) return null;
+    path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+    current = parent;
+  }
+  return current === root ? path : null;
+}
+
+function nodeAtPath(root: Node, path: number[]): Node | null {
+  let current: Node = root;
+  for (const index of path) {
+    const child = current.childNodes.item(index);
+    if (!child) return null;
+    current = child;
+  }
+  return current;
+}
+
+function scrollViewportTop(target: HTMLElement): number {
+  return target.ownerDocument.scrollingElement === target ? 0 : target.getBoundingClientRect().top;
+}
+
+function contentPosition(root: Element, target: HTMLElement): FileViewPosition["contentAnchor"] {
+  const viewportTop = scrollViewportTop(target) + 8;
+  const candidates = Array.from(root.querySelectorAll<HTMLElement>(
+    "h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,table,img",
+  ));
+  const element = candidates.find((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    return rect.height > 0 && rect.bottom > viewportTop;
+  });
+  if (!element) return undefined;
+  const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const textNode = node as Text;
+    if (!textNode.data.trim()) continue;
+    const range = doc.createRange();
+    range.selectNodeContents(textNode);
+    const line = Array.from(range.getClientRects()).find((rect) => rect.height > 0 && rect.bottom > viewportTop);
+    if (!line) continue;
+    const caretRange = (doc as Document & {
+      caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    }).caretRangeFromPoint?.(
+      Math.min(line.right - 1, line.left + 4),
+      Math.max(line.top + 1, Math.min(line.bottom - 1, viewportTop)),
+    );
+    const caretNode = caretRange?.startContainer?.nodeType === Node.TEXT_NODE && root.contains(caretRange.startContainer)
+      ? caretRange.startContainer
+      : textNode;
+    const path = nodePath(root, caretNode);
+    if (!path) return undefined;
+    return {
+      path,
+      textOffset: caretNode === caretRange?.startContainer ? caretRange.startOffset : 0,
+    };
+  }
+  return undefined;
+}
+
+function restoredFileScrollTop(position: FileViewPosition, target: HTMLElement, contentRoot?: Element | null): number {
+  if (position.pdfPage) {
+    const page = target.querySelector<HTMLElement>(`[data-pdf-page="${position.pdfPage.page}"]`);
+    if (page) return Math.max(0, page.offsetTop - 8 + page.offsetHeight * position.pdfPage.offset);
+  }
+  if (position.contentAnchor && contentRoot) {
+    const node = nodeAtPath(contentRoot, position.contentAnchor.path);
+    if (node?.nodeType === Node.TEXT_NODE) {
+      const textNode = node as Text;
+      const offset = Math.min(position.contentAnchor.textOffset, textNode.length);
+      const range = textNode.ownerDocument.createRange();
+      range.setStart(textNode, offset > 0 && offset === textNode.length ? offset - 1 : offset);
+      range.setEnd(textNode, Math.min(textNode.length, offset + 1));
+      const rect = range.getBoundingClientRect();
+      return Math.max(0, target.scrollTop + rect.top - scrollViewportTop(target) - 8);
+    }
+  }
+  return restoredScrollTop(position, Math.max(0, target.scrollHeight - target.clientHeight));
 }
 
 function anchorDataFromMemo(memo: DocumentMemo): QuoteAnchorData | undefined {
@@ -148,6 +250,26 @@ function selectionContextFor(index: TextIndex, selectedText: string, range: Rang
   };
 }
 
+function selectionChatDraft(sourcePath: string, quote: string, anchor?: QuoteAnchorData): string {
+  const location = (() => {
+    const page = anchor?.anchor?.match(/^page=(\d+)$/);
+    if (page) return `Page ${page[1]}`;
+    const spine = anchor?.anchor?.match(/^spine=(\d+)$/);
+    if (spine) return `Chapter ${Number(spine[1]) + 1}`;
+    return "";
+  })();
+  const metadata = [
+    sourcePath ? `- **Source:** \`${sourcePath.replace(/`/g, "'")}\`` : "",
+    location ? `- **Location:** ${location}` : "",
+    anchor?.quotePrefix ? `- **Context before:** ${anchor.quotePrefix}` : "",
+  ].filter(Boolean);
+  const quoted = quote.trim().split("\n").map((line) => `> ${line}`).join("\n");
+  const suffix = anchor?.quoteSuffix ? `\n\n- **Context after:** ${anchor.quoteSuffix}` : "";
+  // Connected chat plugins trim trailing whitespace. WORD JOINER is invisible
+  // but survives trim(), leaving the caret on a fresh line for the question.
+  return `### Selected context\n\n${metadata.join("\n")}\n\n${quoted}${suffix}\n\n---\n\n\u2060`;
+}
+
 function findQuoteMatch(root: Node, quote: string, quotePrefix = "", quoteSuffix = ""): QuoteMatch | null {
   const index = buildTextIndex(root);
   const needle = normalizeAnchorText(quote);
@@ -192,7 +314,11 @@ function setCustomHighlights(win: Window, name: string, ranges: Range[]) {
 function ensureHighlightStyle(doc: Document, name: string) {
   const id = `llm-hub-db-memo-highlight-${name}`;
   if (doc.getElementById(id)) return;
-  const style = (doc.head ?? doc.documentElement).createEl("style", { attr: { id } });
+  // EPUB/HTML documents live in an iframe realm where Obsidian's HTMLElement
+  // prototype helpers (such as createEl) are not installed. Use the standard
+  // DOM API so the highlight stylesheet is injected in both realms.
+  const style = doc.createElement("style");
+  style.id = id;
   style.textContent = `
 ::highlight(${name}) {
   background-color: rgb(217 119 6 / 0.30);
@@ -201,6 +327,7 @@ function ensureHighlightStyle(doc: Document, name: string) {
   background-color: rgb(217 119 6 / 0.58);
 }
 `;
+  (doc.head ?? doc.documentElement).appendChild(style);
 }
 
 function fileKind(path: string): "markdown" | "text" | "html" | "image" | "pdf" | "epub" | "other" {
@@ -890,7 +1017,6 @@ export default function FileWidget({
   const [pdfRenderTick, setPdfRenderTick] = useState(0);
   const [selectedQuote, setSelectedQuote] = useState("");
   const [selectedAnchor, setSelectedAnchor] = useState<QuoteAnchorData | undefined>(undefined);
-  const [temporaryQuote, setTemporaryQuote] = useState("");
   const [selectionMenu, setSelectionMenu] = useState<{ quote: string; x: number; y: number; anchor?: QuoteAnchorData } | null>(null);
   const [memoHover, setMemoHover] = useState<{ x: number; y: number; text: string; count: number } | null>(null);
   const [focusMemoId, setFocusMemoId] = useState<string | undefined>(undefined);
@@ -901,6 +1027,8 @@ export default function FileWidget({
   const pdfViewerRef = useRef<PdfFileViewerHandle>(null);
   const memoRangesRef = useRef<MemoRange[]>([]);
   const highlightNameRef = useRef(`llm-hub-db-memo-${Math.random().toString(36).slice(2)}`);
+  const viewPositionSaveTimerRef = useRef(0);
+  const pendingViewPositionRef = useRef<FileViewPosition | null>(null);
   const app = ctx?.app;
 
   const file = useMemo(() => {
@@ -910,7 +1038,105 @@ export default function FileWidget({
   }, [app, path]);
 
   const kind = fileKind(path);
+  const viewPositionKey = `${path}:${kind}`;
+  const viewPositionStorageKey = `dashboard-hub:file-view-position:${ctx?.widgetId ?? path}`;
   const isReadableText = kind === "markdown" || kind === "text" || kind === "html";
+
+  const persistPendingViewPosition = useCallback(() => {
+    const position = pendingViewPositionRef.current;
+    if (!position) return;
+    pendingViewPositionRef.current = null;
+    try {
+      localStorage.setItem(viewPositionStorageKey, JSON.stringify(position));
+    } catch {
+      // Reading-position persistence is best-effort when storage is unavailable.
+    }
+  }, [viewPositionStorageKey]);
+
+  useEffect(() => () => {
+    window.clearTimeout(viewPositionSaveTimerRef.current);
+    persistPendingViewPosition();
+  }, [persistPendingViewPosition, viewPositionKey]);
+
+  useEffect(() => {
+    if (!path || !["markdown", "html", "epub", "pdf"].includes(kind)) return;
+    const target = kind === "pdf"
+      ? pdfViewerRef.current?.getScrollContainer()
+      : kind === "html" || kind === "epub"
+      ? frameRef.current?.contentDocument?.scrollingElement as HTMLElement | null
+      : contentRef.current?.querySelector<HTMLElement>(".llm-hub-db-markdown") ?? null;
+    if (!target) return;
+    const contentRoot: Element | null = kind === "html" || kind === "epub"
+      ? frameRef.current?.contentDocument?.body ?? null
+      : kind === "markdown" ? markdownRef.current : null;
+
+    let userScrolled = false;
+    let suppressScrollUntil = 0;
+    let currentContentAnchor: FileViewPosition["contentAnchor"];
+    let stored: FileViewPosition | null = null;
+    try {
+      stored = parseFileViewPosition(localStorage.getItem(viewPositionStorageKey), viewPositionKey);
+    } catch {
+      stored = null;
+    }
+
+    const onScroll = () => {
+      if (performance.now() < suppressScrollUntil) return;
+      userScrolled = true;
+      const max = Math.max(0, target.scrollHeight - target.clientHeight);
+      const top = Math.max(0, target.scrollTop);
+      pendingViewPositionRef.current = {
+        key: viewPositionKey,
+        top,
+        ratio: max > 0 ? Math.min(1, top / max) : 0,
+        ...(kind === "pdf" ? { pdfPage: pdfPagePosition(target) } : {}),
+        ...(contentRoot ? { contentAnchor: contentPosition(contentRoot, target) } : {}),
+      };
+      currentContentAnchor = contentRoot ? contentPosition(contentRoot, target) : undefined;
+      window.clearTimeout(viewPositionSaveTimerRef.current);
+      viewPositionSaveTimerRef.current = window.setTimeout(persistPendingViewPosition, VIEW_POSITION_SAVE_DELAY_MS);
+    };
+    const scrollSource: EventTarget = kind === "html" || kind === "epub"
+      ? frameRef.current?.contentWindow ?? target
+      : target;
+    scrollSource.addEventListener("scroll", onScroll, { passive: true });
+
+    const timers: number[] = [];
+    if (stored) {
+      currentContentAnchor = stored.contentAnchor;
+      for (const delay of [0, 100, 400, 1000, 2500]) {
+        timers.push(window.setTimeout(() => {
+          if (userScrolled || !stored) return;
+          suppressScrollUntil = performance.now() + 150;
+          target.scrollTop = restoredFileScrollTop(stored, target, contentRoot);
+        }, delay));
+      }
+    }
+    let resizeFrame = 0;
+    const resizeObserver = contentRoot && kind !== "pdf" ? new ResizeObserver(() => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(() => {
+        if (!currentContentAnchor) {
+          currentContentAnchor = contentPosition(contentRoot, target);
+          return;
+        }
+        suppressScrollUntil = performance.now() + 150;
+        target.scrollTop = restoredFileScrollTop({
+          key: viewPositionKey,
+          top: target.scrollTop,
+          ratio: 0,
+          contentAnchor: currentContentAnchor,
+        }, target, contentRoot);
+      });
+    }) : null;
+    if (resizeObserver) resizeObserver.observe(frameRef.current ?? target);
+    return () => {
+      scrollSource.removeEventListener("scroll", onScroll);
+      timers.forEach((timer) => window.clearTimeout(timer));
+      window.cancelAnimationFrame(resizeFrame);
+      resizeObserver?.disconnect();
+    };
+  }, [content, epubHtml, frameLoadTick, kind, loading, path, persistPendingViewPosition, viewPositionKey, viewPositionStorageKey]);
 
   useEffect(() => {
     if (!app || !file || !isReadableText) {
@@ -1116,11 +1342,7 @@ export default function FileWidget({
 
   const askAiAboutSelection = useCallback(() => {
     if (!selectionMenu) return;
-    setTemporaryQuote(selectionMenu.quote);
-    void ctx.plugin.askChatAboutSelection({
-      text: selectionMenu.quote,
-      sourcePath: path || undefined,
-    });
+    ctx.plugin.openChatWithDraft(selectionChatDraft(path, selectionMenu.quote, selectionMenu.anchor));
     setSelectionMenu(null);
   }, [ctx.plugin, path, selectionMenu]);
 
@@ -1169,7 +1391,7 @@ export default function FileWidget({
 
     const interactiveMemoKind = kind === "pdf" || kind === "markdown" || kind === "epub";
     const showSavedHighlights = interactiveMemoKind ? Boolean(memos?.length) : Boolean(memoPanelOpen && memos?.length);
-    if (!showSavedHighlights && !temporaryQuote) {
+    if (!showSavedHighlights) {
       clear();
       return clear;
     }
@@ -1202,11 +1424,6 @@ export default function FileWidget({
         else frameRanges.push(found.range);
         if (interactiveMemoKind) memoRanges.push({ range: found.range, memos: groupMemos, win: found.win });
       }
-      if (temporaryQuote) {
-        const found = findQuoteRange(temporaryQuote);
-        if (found?.win === window) hostRanges.push(found.range);
-        else if (found) frameRanges.push(found.range);
-      }
       memoRangesRef.current = memoRanges;
 
       setCustomHighlights(window, name, hostRanges);
@@ -1217,7 +1434,7 @@ export default function FileWidget({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [memoPanelOpen, memos, temporaryQuote, content, epubHtml, kind, frameLoadTick, markdownRenderTick, pdfRenderTick, findQuoteRange]);
+  }, [memoPanelOpen, memos, content, epubHtml, kind, frameLoadTick, markdownRenderTick, pdfRenderTick, findQuoteRange]);
 
   const hitMemo = useCallback((clientX: number, clientY: number, selectionWin: Window): MemoRange | null => {
     for (const group of memoRangesRef.current) {
@@ -1275,10 +1492,6 @@ export default function FileWidget({
     event.preventDefault();
     event.stopPropagation();
   }, [kind, openMemoAtPoint]);
-
-  useEffect(() => {
-    setTemporaryQuote("");
-  }, [path]);
 
   useEffect(() => () => {
     const name = highlightNameRef.current;
