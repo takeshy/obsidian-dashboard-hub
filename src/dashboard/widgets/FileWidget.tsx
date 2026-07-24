@@ -272,7 +272,7 @@ function HtmlFrame({
   title: string;
   onSelectionContextMenu?: (text: string, x: number, y: number, anchor?: QuoteAnchorData) => void;
   onSelectionClear?: () => void;
-  frameRef: React.RefObject<HTMLIFrameElement | null>;
+  frameRef: React.RefObject<HTMLIFrameElement>;
   onLoad?: () => void;
   anchorKind?: "html" | "epub";
   onMemoPointerMove?: (clientX: number, clientY: number, win: Window, hostX: number, hostY: number) => boolean;
