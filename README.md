@@ -85,7 +85,7 @@ you need to unlock it. Changing the Base directory does not move existing files.
 
 Dashboard Hub is fully usable on its own. If you also install a compatible
 Obsidian plugin, it can add AI actions without taking ownership of your
-dashboards. Search for **Gemini Helper** or **Local LLM Hub** in Obsidian's
+dashboards. Search for **[Gemini Helper](https://github.com/takeshy/obsidian-gemini-helper)** or **[Local LLM Hub](https://github.com/takeshy/obsidian-local-llm-hub)** in Obsidian's
 Community plugins to install one of them.
 
 Connected plugins can answer questions about a selection or reading memo,
