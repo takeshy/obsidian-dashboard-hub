@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Modal, TFile } from "obsidian";
-import { CalendarDays, Columns3, FileKey2, History, LayoutDashboard, LoaderCircle, NotebookTabs, Plus, Rocket, Workflow as WorkflowIcon } from "lucide-react";
+import { CalendarDays, Columns3, Database, FileKey2, Files, History, LayoutDashboard, LoaderCircle, NotebookTabs, Plus, Rocket, Search, Workflow as WorkflowIcon, X, type LucideIcon } from "lucide-react";
 import type { DashboardHubPlugin } from "src/plugin";
 import { t } from "src/i18n";
 import type { WidgetContext } from "src/dashboard/types";
@@ -10,19 +10,23 @@ import CalendarWidget from "src/dashboard/widgets/CalendarWidget";
 import MemoListWidget from "src/dashboard/widgets/MemoListWidget";
 import KanbanWidget from "src/dashboard/widgets/KanbanWidget";
 import SecretManagerWidget from "src/dashboard/widgets/SecretManagerWidget";
+import FileWidget from "src/dashboard/widgets/FileWidget";
+import BaseWidget from "src/dashboard/widgets/BaseWidget";
 import { filesInVaultFolder } from "src/utils/vaultFiles";
 import ObsidianMarkdown from "src/dashboard/widgets/ObsidianMarkdown";
 
-export type LauncherTool = "dashboard" | "workflow" | "timeline" | "calendar" | "memo-list" | "kanban" | "secret-manager";
+export type LauncherTool = "dashboard" | "secret-manager" | "workflow" | "timeline" | "calendar" | "memo-list" | "kanban" | "file" | "base";
 
 const TOOLS = [
   { id: "dashboard", label: "launcher.dashboard", help: "launcher.dashboardHelp", icon: LayoutDashboard },
+  { id: "secret-manager", label: "launcher.secrets", help: "launcher.secretsHelp", icon: FileKey2 },
   { id: "workflow", label: "launcher.workflow", help: "launcher.workflowHelp", icon: WorkflowIcon },
   { id: "timeline", label: "launcher.timeline", help: "launcher.timelineHelp", icon: History },
   { id: "calendar", label: "launcher.calendar", help: "launcher.calendarHelp", icon: CalendarDays },
   { id: "memo-list", label: "launcher.memos", help: "launcher.memosHelp", icon: NotebookTabs },
   { id: "kanban", label: "launcher.kanban", help: "launcher.kanbanHelp", icon: Columns3 },
-  { id: "secret-manager", label: "launcher.secrets", help: "launcher.secretsHelp", icon: FileKey2 },
+  { id: "file", label: "launcher.file", help: "launcher.fileHelp", icon: Files },
+  { id: "base", label: "launcher.base", help: "launcher.baseHelp", icon: Database },
 ] as const;
 
 function WorkflowLauncher({ plugin }: { plugin: DashboardHubPlugin }) {
@@ -111,14 +115,97 @@ function DashboardLauncher({ plugin, onClose }: { plugin: DashboardHubPlugin; on
   </div>;
 }
 
+/**
+ * FileWidget in the launcher. There is no dashboard to persist config to, so
+ * the widget's own config changes (memo panel open/collapse) are held in local
+ * state for the lifetime of the modal. Starts with the memo rail collapsed so
+ * the file gets the full width until the memos are actually wanted.
+ */
+function LauncherFileWidget({ path, ctx }: { path: string; ctx: WidgetContext }) {
+  const [config, setConfig] = useState<Record<string, unknown>>(() => ({
+    path,
+    showHeader: true,
+    memoPanelOpen: true,
+    memoPanelCollapsed: true,
+  }));
+  useEffect(() => {
+    setConfig((current) => ({ ...current, path }));
+  }, [path]);
+
+  return <FileWidget
+    config={config}
+    ctx={{ ...ctx, onConfigChange: (next) => setConfig(next as Record<string, unknown>) }}
+  />;
+}
+
+/**
+ * Pick a vault file, then hand its path to a widget. File and Base both need a
+ * target file that the launcher has no config UI for, so they get a searchable
+ * list first and swap to the widget once something is chosen.
+ */
+function FileToolLauncher({
+  files,
+  icon: Icon,
+  emptyText,
+  searchPlaceholder,
+  render,
+}: {
+  files: TFile[];
+  icon: LucideIcon;
+  emptyText: string;
+  searchPlaceholder: string;
+  render: (path: string) => ReactNode;
+}) {
+  const [path, setPath] = useState("");
+  const [query, setQuery] = useState("");
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (q ? files.filter((file) => file.path.toLowerCase().includes(q)) : files).slice(0, 100);
+  }, [files, query]);
+
+  if (path) {
+    return <div className="dashboard-hub-launcher-filehost">
+      <button type="button" className="dashboard-hub-launcher-fileback" onClick={() => setPath("")}>
+        ← {t("launcher.fileBack")}
+      </button>
+      <div className="dashboard-hub-launcher-filebody">{render(path)}</div>
+    </div>;
+  }
+
+  return <div className="dashboard-hub-launcher-dashboards">
+    <div className="dashboard-hub-launcher-filesearch">
+      <Search size={15} aria-hidden="true" />
+      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder} />
+      {query && <button type="button" aria-label={t("common.close")} onClick={() => setQuery("")}><X size={13} /></button>}
+    </div>
+    {filtered.length > 0 ? <div className="dashboard-hub-launcher-dashboard-list">
+      {filtered.map((file) => <button type="button" key={file.path} onClick={() => setPath(file.path)}>
+        <Icon size={18} />
+        <span><strong>{file.basename}</strong><small>{file.path}</small></span>
+      </button>)}
+    </div> : <div className="dashboard-hub-db-widget-empty">{emptyText}</div>}
+  </div>;
+}
+
 function LauncherContent({ plugin, initialTool, onClose }: { plugin: DashboardHubPlugin; initialTool: LauncherTool | null; onClose: () => void }) {
   const [tool, setTool] = useState<LauncherTool | null>(initialTool);
   const tools = TOOLS.filter((item) => item.id !== "workflow" || plugin.hasCapability("workflow"));
+  // Most-recently-edited first: on mobile the file you want is nearly always
+  // one you just touched, which saves typing into the search box.
+  const recentFiles = useMemo(
+    () => plugin.app.vault.getFiles().sort((a, b) => b.stat.mtime - a.stat.mtime),
+    [plugin],
+  );
+  const baseFiles = useMemo(
+    () => recentFiles.filter((file) => file.extension === "base"),
+    [recentFiles],
+  );
   const ctx: WidgetContext = {
     app: plugin.app,
     plugin,
     sourcePath: "",
     size: { w: 12, h: 8 },
+    closeHost: onClose,
   };
   const title = TOOLS.find((item) => item.id === tool)?.label;
 
@@ -126,6 +213,9 @@ function LauncherContent({ plugin, initialTool, onClose }: { plugin: DashboardHu
     <header className="dashboard-hub-launcher-header">
       {tool ? <button type="button" onClick={() => setTool(null)}>← {t("launcher.title")}</button> : <Rocket size={19} />}
       <strong>{title ? t(title) : t("launcher.title")}</strong>
+      <button type="button" className="dashboard-hub-launcher-close" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
+        <X size={20} />
+      </button>
     </header>
     <div className={`dashboard-hub-launcher-body${tool ? " is-tool" : ""}`}>
       {!tool && <div className="dashboard-hub-launcher-grid">
@@ -151,6 +241,20 @@ function LauncherContent({ plugin, initialTool, onClose }: { plugin: DashboardHu
         ],
       }} ctx={ctx} />}
       {tool === "secret-manager" && <SecretManagerWidget config={{ folder: "Secrets" }} ctx={ctx} />}
+      {tool === "file" && <FileToolLauncher
+        files={recentFiles}
+        icon={Files}
+        emptyText={t("launcher.fileEmpty")}
+        searchPlaceholder={t("launcher.fileSearch")}
+        render={(path) => <LauncherFileWidget path={path} ctx={ctx} />}
+      />}
+      {tool === "base" && <FileToolLauncher
+        files={baseFiles}
+        icon={Database}
+        emptyText={t("launcher.baseEmpty")}
+        searchPlaceholder={t("launcher.baseSearch")}
+        render={(path) => <BaseWidget config={{ base: path }} ctx={ctx} />}
+      />}
     </div>
   </div>;
 }

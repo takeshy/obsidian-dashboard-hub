@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { Plus, Undo2, Redo2, Columns3, Rows3 } from "lucide-react";
-import type { App } from "obsidian";
+import { Plus, Undo2, Redo2, Columns3, Rows3, Rocket } from "lucide-react";
+import { Platform, type App } from "obsidian";
 import { t } from "src/i18n";
 import type { DashboardHubPlugin } from "src/plugin";
+import { ToolLauncherModal } from "src/ui/ToolLauncherModal";
 import { generateId } from "src/utils/id";
 import { useBreakpoint } from "./useBreakpoint";
 import { useGridLayout } from "./useGridLayout";
@@ -339,22 +340,38 @@ export function DashboardCanvas({
           >
             <Redo2 size={14} />
           </button>
-          <button
-            onClick={() => handleLayoutDirection("horizontal")}
-            aria-pressed={activeLayoutDirection === "horizontal"}
-            title={t(activeLayoutDirection === "horizontal" ? "dashboard.alignHorizontal" : "dashboard.useHorizontalLayout")}
-            className={`dashboard-hub-db-toolbtn${activeLayoutDirection === "horizontal" ? " is-active" : ""}`}
-          >
-            <Columns3 size={14} />
-          </button>
-          <button
-            onClick={() => handleLayoutDirection("vertical")}
-            aria-pressed={activeLayoutDirection === "vertical"}
-            title={t(activeLayoutDirection === "vertical" ? "dashboard.alignVertical" : "dashboard.useVerticalLayout")}
-            className={`dashboard-hub-db-toolbtn${activeLayoutDirection === "vertical" ? " is-active" : ""}`}
-          >
-            <Rows3 size={14} />
-          </button>
+          {/* The layout equalizers only make sense on a multi-column grid; on
+              mobile the dashboard is a single column, so that space goes to
+              the launcher instead. */}
+          {Platform.isMobile ? (
+            <button
+              onClick={() => new ToolLauncherModal(plugin).open()}
+              title={t("launcher.open")}
+              aria-label={t("launcher.open")}
+              className="dashboard-hub-db-toolbtn"
+            >
+              <Rocket size={14} />
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => handleLayoutDirection("horizontal")}
+                aria-pressed={activeLayoutDirection === "horizontal"}
+                title={t(activeLayoutDirection === "horizontal" ? "dashboard.alignHorizontal" : "dashboard.useHorizontalLayout")}
+                className={`dashboard-hub-db-toolbtn${activeLayoutDirection === "horizontal" ? " is-active" : ""}`}
+              >
+                <Columns3 size={14} />
+              </button>
+              <button
+                onClick={() => handleLayoutDirection("vertical")}
+                aria-pressed={activeLayoutDirection === "vertical"}
+                title={t(activeLayoutDirection === "vertical" ? "dashboard.alignVertical" : "dashboard.useVerticalLayout")}
+                className={`dashboard-hub-db-toolbtn${activeLayoutDirection === "vertical" ? " is-active" : ""}`}
+              >
+                <Rows3 size={14} />
+              </button>
+            </>
+          )}
           <button
             onClick={() => setShowPalette(true)}
             className="dashboard-hub-db-toolbtn is-accent"

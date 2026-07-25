@@ -640,6 +640,7 @@ function MemoPanel({
   // hidden behind Obsidian's floating nav), so it only renders as a modal
   // opened from a launcher button.
   const [composeOpen, setComposeOpen] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
   const composeRef = useRef<HTMLDivElement>(null);
   const composeTextareaRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLDivElement>(null);
@@ -850,6 +851,8 @@ function MemoPanel({
     <div
       ref={composeRef}
       className={`dashboard-hub-db-memo-compose${keyboardTarget === "compose" ? " is-keyboard-focused" : ""}${Platform.isMobile ? composeOpen ? " is-mobile-modal" : " is-mobile-hidden" : ""}`}
+      role={Platform.isMobile ? "dialog" : undefined}
+      aria-modal={Platform.isMobile ? true : undefined}
       {...keyboardFocusProps("compose")}
     >
       {selectedQuote && (
@@ -874,9 +877,14 @@ function MemoPanel({
       </button>
     </div>
   );
+  // Same as the other widgets: inside ToolLauncherModal the compose form must
+  // stay within the Obsidian modal, or its focus trap steals focus back.
+  const mobileComposeTarget = Platform.isMobile
+    ? panelRef.current?.closest(".modal") ?? panelRef.current?.ownerDocument.body
+    : null;
 
   return (
-    <aside className="dashboard-hub-db-memo-panel">
+    <aside ref={panelRef} className="dashboard-hub-db-memo-panel">
       <div className="dashboard-hub-db-memo-header">
         <span>{t("memo.panelTitle")}</span>
         <span className="dashboard-hub-db-memo-header-actions">
@@ -986,15 +994,19 @@ function MemoPanel({
               {t("memo.add")}
             </button>
           </div>
-          {composeOpen && (
-            <button
-              type="button"
-              className="dashboard-hub-db-memo-compose-backdrop"
-              aria-label={t("dashboard.cancel")}
-              onClick={closeCompose}
-            />
+          {composeOpen && mobileComposeTarget && createPortal(
+            <>
+              <button
+                type="button"
+                className="dashboard-hub-db-memo-compose-backdrop"
+                {...keepFocusProps}
+                aria-label={t("dashboard.cancel")}
+                onClick={closeCompose}
+              />
+              {compose}
+            </>,
+            mobileComposeTarget,
           )}
-          {compose}
         </>
       ) : compose}
     </aside>
@@ -1552,7 +1564,15 @@ export default function FileWidget({
     return <div className="dashboard-hub-db-widget-empty">{t("dashboard.fileNotFound")}: {path}</div>;
   }
 
-  const openFile = () => void ctx.app.workspace.getLeaf(true).openFile(file);
+  // Dismiss the launcher modal first, otherwise it stays stacked over the note
+  // that was just opened behind it.
+  const openFile = () => {
+    ctx.closeHost?.();
+    const leaf = ctx.app.workspace.getLeaf(true);
+    void leaf.openFile(file).then(() => {
+      ctx.app.workspace.setActiveLeaf(leaf, { focus: true });
+    });
+  };
   const saveText = async (next: string) => {
     await ctx.app.vault.modify(file, next);
     setContent(next);

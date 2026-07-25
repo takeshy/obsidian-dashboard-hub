@@ -137,7 +137,7 @@ export class DashboardHubPlugin extends Plugin {
       name: "Create dashboard",
       callback: () => this.promptCreateDashboard(),
     });
-    for (const tool of ["workflow", "timeline", "calendar", "memo-list", "kanban", "secret-manager"] as LauncherTool[]) {
+    for (const tool of ["workflow", "timeline", "calendar", "memo-list", "kanban", "secret-manager", "file", "base"] as LauncherTool[]) {
       this.addCommand({
         id: `open-${tool}`,
         name: `Open ${tool}`,

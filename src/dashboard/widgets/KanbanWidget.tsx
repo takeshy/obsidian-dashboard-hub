@@ -529,7 +529,13 @@ export default function KanbanWidget({
             card.file,
             card.title,
             ctx.sourcePath ?? card.file.path,
-            () => void ctx.app.workspace.getLeaf(true).openFile(card.file),
+            () => {
+              ctx.closeHost?.();
+              const leaf = ctx.app.workspace.getLeaf(true);
+              void leaf.openFile(card.file).then(() => {
+                ctx.app.workspace.setActiveLeaf(leaf, { focus: true });
+              });
+            },
           ).open();
         }
       };

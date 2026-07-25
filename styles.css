@@ -1,6 +1,24 @@
 /* Dashboard (.dashboard widget grid)                                     */
 /* ===================================================================== */
 
+/* Mobile modal convention
+   -----------------------
+   Any form that takes text input on mobile is anchored to the TOP of the
+   screen and scrolls internally, rather than being centred or pinned to the
+   bottom. The on-screen keyboard eats the bottom half of the viewport, so a
+   bottom-anchored or centred dialog is exactly what gets covered — and when
+   the keyboard-inset measurement is off, a `bottom`-anchored dialog slides
+   off-screen entirely instead of degrading gracefully.
+
+   The shape is:
+     position: fixed;
+     top: calc(env(safe-area-inset-top) + 12px);
+     max-height: calc(100dvh - <widget>-keyboard-inset - safe-area-top - 24px);
+     overflow-y: auto;
+
+   The per-widget --dashboard-hub-db-*-keyboard-inset variables (set from JS
+   off visualViewport) now only shrink the height; they never move the box. */
+
 .dashboard-hub-dashboard-container {
   height: 100%;
   overflow: hidden;
@@ -877,10 +895,12 @@
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(var(--dashboard-hub-db-memo-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  top: calc(env(safe-area-inset-top) + 12px);
   z-index: 1000;
-  max-height: min(420px, calc(100vh - var(--dashboard-hub-db-memo-keyboard-inset, 0px) - 40px));
+  max-height: calc(100dvh - var(--dashboard-hub-db-memo-keyboard-inset, 0px) - env(safe-area-inset-top) - 24px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 12px;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
@@ -1743,7 +1763,7 @@
 
 /* Secret manager widget */
 .dashboard-hub-db-secret-manager { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.dashboard-hub-db-secret-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--background-modifier-border); background: var(--background-secondary); }
+.dashboard-hub-db-secret-toolbar { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--background-modifier-border); background: var(--background-secondary); }
 .dashboard-hub-db-secret-search { position: relative; display: flex; flex: 1; min-width: 0; align-items: center; }
 .dashboard-hub-db-secret-search > svg { position: absolute; left: 11px; z-index: 1; color: var(--text-faint); pointer-events: none; transition: color 120ms ease; }
 .dashboard-hub-db-secret-search input { width: 100%; height: 36px; min-width: 0; padding: 0 34px; border: 1px solid var(--background-modifier-border); border-radius: 10px; color: var(--text-normal); background: var(--background-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); transition: border-color 120ms ease, box-shadow 120ms ease; }
@@ -1753,7 +1773,7 @@
 .dashboard-hub-db-secret-search button { position: absolute; right: 6px; display: grid; width: 24px; height: 24px; place-items: center; padding: 0; border: 0; border-radius: 6px; color: var(--text-muted); background: transparent; box-shadow: none; }
 .dashboard-hub-db-secret-search button:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
 .dashboard-hub-db-secret-toolbar .dashboard-hub-db-primary-btn { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.dashboard-hub-db-secret-list { min-height: 0; overflow: auto; padding: 6px; }
+.dashboard-hub-db-secret-list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px; }
 .dashboard-hub-db-secret-row { display: flex; align-items: center; gap: 8px; padding: 8px; border-bottom: 1px solid var(--background-modifier-border); cursor: pointer; }
 .dashboard-hub-db-secret-row:hover { background: var(--background-secondary); }
 .dashboard-hub-db-secret-group { border-bottom: 1px solid var(--background-modifier-border); }
@@ -1824,6 +1844,42 @@
 .dashboard-hub-db-secret-dialog textarea.dashboard-hub-db-secret-value { width: 100%; height: auto; min-height: 140px; }
 .dashboard-hub-db-secret-error { margin: 0; color: var(--text-error); font-size: var(--font-ui-small); }
 .dashboard-hub-spin { animation: dashboard-hub-db-spin 0.8s linear infinite; }
+/* All three overlays (create / view / unlock) are portalled to the body on
+   mobile, so they need position:fixed here — the base rule is absolute, which
+   inside a widget cell clips them to that cell. Top-anchored and scrollable
+   per the mobile modal convention at the top of this file. */
+.is-mobile .dashboard-hub-db-secret-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  align-items: flex-start;
+  padding: calc(env(safe-area-inset-top) + 12px) 8px 8px;
+}
+.is-mobile .dashboard-hub-db-secret-overlay .dashboard-hub-db-secret-dialog {
+  width: 100%;
+  /* max-height, not height: a fixed height forces the box under the keyboard
+     and leaves the footer unreachable when 100dvh does not account for it. */
+  height: auto;
+  max-height: calc(100dvh - var(--dashboard-hub-db-secret-keyboard-inset, 0px) - env(safe-area-inset-top) - 24px);
+  border-radius: 16px;
+}
+.is-mobile .dashboard-hub-db-secret-overlay .dashboard-hub-db-secret-dialog-body,
+.is-mobile .dashboard-hub-db-secret-overlay .dashboard-hub-db-secret-unlock,
+.is-mobile .dashboard-hub-db-secret-overlay .dashboard-hub-db-secret-edit-form,
+.is-mobile .dashboard-hub-db-secret-overlay .dashboard-hub-db-secret-detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* The compact unlock dialog is a plain form with no scroll container of its
+   own, so it has to scroll as a whole. */
+.is-mobile .dashboard-hub-db-secret-overlay .dashboard-hub-db-secret-dialog.is-compact {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* Kanban widget */
 .dashboard-hub-db-kanban-wrap {
@@ -1875,6 +1931,20 @@
 }
 .dashboard-hub-db-kanban-new:hover {
   background: var(--interactive-accent-hover);
+}
+.is-mobile .modal.dashboard-hub-db-kanban-new-card-modal {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: 12px;
+  bottom: auto;
+  left: 12px;
+  width: auto;
+  max-width: none;
+  max-height: calc(100dvh - var(--dashboard-hub-db-kanban-keyboard-inset, 0px) - env(safe-area-inset-top) - 24px);
+  margin: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .dashboard-hub-db-kanban {
   display: flex;
@@ -2472,9 +2542,24 @@
 .dashboard-hub-db-calendar-modal-close { position: sticky; z-index: 2; top: 10px; float: right; display: grid; width: 30px; height: 30px; margin: 10px 10px -40px 0; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--background-secondary); color: var(--text-muted); box-shadow: none; }
 .dashboard-hub-db-calendar-modal-close:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
 
+/* Top-anchored and scrollable on narrow screens rather than a bottom sheet:
+   a sheet pinned to the bottom is the first thing the on-screen keyboard
+   covers. See the mobile modal convention above. */
 @media (max-width: 560px) {
-  .dashboard-hub-db-calendar-modal-backdrop { align-items: end; padding: 0; }
-  .dashboard-hub-db-calendar-modal { width: 100vw; max-height: 88vh; border-radius: var(--radius-l) var(--radius-l) 0 0; }
+  .dashboard-hub-db-calendar-modal-backdrop {
+    align-items: start;
+    padding: calc(env(safe-area-inset-top) + 12px) 0 0;
+  }
+  .dashboard-hub-db-calendar-modal {
+    width: 100vw;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+    border-radius: var(--radius-l) var(--radius-l) 0 0;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+.is-mobile .dashboard-hub-db-calendar-modal-backdrop.is-event-form-open .dashboard-hub-db-calendar-modal {
+  max-height: calc(100dvh - var(--dashboard-hub-db-calendar-keyboard-inset, 0px) - env(safe-area-inset-top) - 24px);
 }
 
 .dashboard-hub-db-calendar-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -2898,26 +2983,39 @@
   background: rgba(0, 0, 0, 0.24);
   box-shadow: none;
 }
+/* Anchored to the top of the screen and scrollable — see the mobile modal
+   convention above. The keyboard inset only shrinks the height, so the form
+   never gets pushed off-screen when the on-screen keyboard opens. */
 .is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal {
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(var(--dashboard-hub-db-timeline-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  top: calc(env(safe-area-inset-top) + 12px);
   z-index: 1000;
-  max-height: min(420px, calc(100vh - var(--dashboard-hub-db-timeline-keyboard-inset, 0px) - 40px));
+  max-height: calc(100dvh - var(--dashboard-hub-db-timeline-keyboard-inset, 0px) - env(safe-area-inset-top) - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 18px;
+  background: var(--background-primary);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-composer-actions {
+  background: var(--background-primary);
 }
 /* Same keyboard handling for the inline edit form. */
 .is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused {
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(var(--dashboard-hub-db-timeline-keyboard-inset, 0px) + env(safe-area-inset-bottom) + 12px);
+  top: calc(env(safe-area-inset-top) + 12px);
   z-index: 1000;
-  max-height: min(420px, calc(100vh - var(--dashboard-hub-db-timeline-keyboard-inset, 0px) - 40px));
+  max-height: calc(100dvh - var(--dashboard-hub-db-timeline-keyboard-inset, 0px) - env(safe-area-inset-top) - 24px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 12px;
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
@@ -2956,6 +3054,11 @@
   background: transparent;
   color: var(--interactive-accent);
   box-shadow: none;
+}
+.dashboard-hub-launcher-header .dashboard-hub-launcher-close {
+  display: none;
+  margin-left: auto;
+  color: var(--text-normal);
 }
 .dashboard-hub-launcher-body {
   min-height: 0;
@@ -3057,6 +3160,9 @@
 }
 .dashboard-hub-launcher-dashboard-list {
   display: grid;
+  /* flex:1 is load-bearing — as a plain `0 1 auto` item with min-height:0 this
+     collapses to nothing the moment the on-screen keyboard shrinks the modal. */
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -3179,7 +3285,7 @@
 @media (max-width: 640px) {
   .modal.dashboard-hub-launcher-modal {
     width: 100vw;
-    height: 100vh;
+    height: 100dvh;
     max-width: none;
     max-height: none;
     border-radius: 0;
@@ -3200,4 +3306,456 @@
     grid-template-columns: 1fr;
     grid-template-rows: minmax(120px, 36%) minmax(0, 1fr);
   }
+}
+.is-mobile .dashboard-hub-launcher-modal .modal-close-button {
+  display: none;
+}
+.is-mobile .dashboard-hub-launcher-header {
+  flex-basis: calc(52px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 8px 0 12px;
+}
+.is-mobile .dashboard-hub-launcher-header .dashboard-hub-launcher-close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  margin-left: auto;
+  padding: 0;
+  place-items: center;
+  touch-action: manipulation;
+}
+
+/* ===================================================================== */
+/* Mobile input forms                                                    */
+/* ===================================================================== */
+
+/* iOS Safari zooms the whole viewport whenever a focused field's font-size
+   is under 16px, and Obsidian's --font-ui-* scale sits well below that. That
+   zoom (plus ~22px icon buttons inherited from the desktop layout) is what
+   made these forms awkward to type in. Everything below keeps mobile fields
+   at 16px and grows controls to the 44px target the launcher already uses. */
+.is-mobile .dashboard-hub-db-timeline-composer textarea,
+.is-mobile .dashboard-hub-db-timeline-edit textarea,
+.is-mobile .dashboard-hub-db-memo-compose textarea,
+.is-mobile .dashboard-hub-db-calendar-modal input,
+.is-mobile .dashboard-hub-db-calendar-modal textarea,
+.is-mobile .dashboard-hub-db-calendar-modal select,
+.is-mobile .dashboard-hub-db-secret-dialog input,
+.is-mobile .dashboard-hub-db-secret-dialog textarea,
+.is-mobile .dashboard-hub-db-kanban-new-card-modal input,
+.is-mobile .dashboard-hub-db-kanban-new-card-modal textarea {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Shared chrome for the top-anchored input sheets. */
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal,
+.is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused,
+.is-mobile .dashboard-hub-db-memo-compose.is-mobile-modal {
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--background-primary);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.34);
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal textarea,
+.is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused textarea,
+.is-mobile .dashboard-hub-db-memo-compose.is-mobile-modal textarea {
+  min-height: 132px;
+  max-height: 42dvh;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--background-primary-alt);
+}
+
+/* A real separated action bar instead of a row of cramped icons. */
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-composer-actions,
+.is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused .dashboard-hub-db-timeline-composer-actions {
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-composer-primary-actions,
+.is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused .dashboard-hub-db-timeline-composer-primary-actions {
+  gap: 8px;
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-iconbtn,
+.is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused .dashboard-hub-db-timeline-iconbtn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  touch-action: manipulation;
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-post,
+.is-mobile .dashboard-hub-db-timeline-edit.is-keyboard-focused .dashboard-hub-db-timeline-post {
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  touch-action: manipulation;
+}
+
+/* Larger image thumbnails — the 58px desktop ones are hard to hit to remove. */
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-image,
+.is-mobile .dashboard-hub-db-memo-compose.is-mobile-modal .dashboard-hub-db-timeline-image {
+  width: 68px;
+  height: 68px;
+}
+
+/* Dim the app properly so the sheet reads as a modal. */
+.is-mobile .dashboard-hub-db-timeline-composer-backdrop,
+.is-mobile .dashboard-hub-db-memo-compose-backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+/* Calendar event form: the desktop layout packs 26px date fields and unsized
+   buttons into a grid, which is unusable with a thumb. */
+.is-mobile .dashboard-hub-db-calendar-event-form {
+  gap: 14px;
+  padding: 14px;
+}
+.is-mobile .dashboard-hub-db-calendar-event-form label {
+  font-size: var(--font-ui-small);
+}
+.is-mobile .dashboard-hub-db-calendar-event-form input,
+.is-mobile .dashboard-hub-db-calendar-event-form select,
+.is-mobile .dashboard-hub-db-calendar-event-date input {
+  min-height: 44px;
+  height: auto;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+.is-mobile .dashboard-hub-db-calendar-event-content-field textarea {
+  min-height: 120px;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+.is-mobile .dashboard-hub-db-calendar-event-form-actions {
+  gap: 10px;
+  padding-top: 4px;
+}
+.is-mobile .dashboard-hub-db-calendar-event-form-actions button {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  touch-action: manipulation;
+}
+.is-mobile .dashboard-hub-db-calendar-modal-close {
+  width: 44px;
+  height: 44px;
+  margin: 8px 8px -52px 0;
+  touch-action: manipulation;
+}
+.is-mobile .dashboard-hub-db-calendar-detail-heading button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: var(--font-ui-small);
+  touch-action: manipulation;
+}
+
+/* Secret dialogs: 38px fields and 34px icon buttons are desktop sizes. */
+.is-mobile .dashboard-hub-db-secret-dialog input {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+}
+.is-mobile .dashboard-hub-db-secret-dialog textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+.is-mobile .dashboard-hub-db-secret-dialog textarea.is-secret {
+  height: auto;
+  min-height: 60px;
+}
+.is-mobile .dashboard-hub-db-secret-dialog-footer button,
+.is-mobile .dashboard-hub-db-secret-actions button,
+.is-mobile .dashboard-hub-db-secret-unlock button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  touch-action: manipulation;
+}
+.is-mobile .dashboard-hub-db-secret-metadata-row input {
+  height: 44px;
+  min-height: 44px;
+}
+
+/* Launcher: File / Base file pickers                                     */
+.dashboard-hub-launcher-filesearch {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+}
+.dashboard-hub-launcher-filesearch svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+.dashboard-hub-launcher-filesearch input {
+  width: 100%;
+  height: 38px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.dashboard-hub-launcher-filesearch input:focus {
+  box-shadow: none;
+}
+.dashboard-hub-launcher-filesearch > button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  place-items: center;
+  cursor: pointer;
+}
+.dashboard-hub-launcher-filesearch > button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.dashboard-hub-launcher-filehost {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.dashboard-hub-launcher-fileback {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  cursor: pointer;
+}
+.dashboard-hub-launcher-fileback:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+.dashboard-hub-launcher-filebody {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: auto;
+}
+.dashboard-hub-launcher-filebody > .dashboard-hub-db-file-wrap,
+.dashboard-hub-launcher-filebody > .dashboard-hub-db-base {
+  height: 100%;
+  min-height: 0;
+}
+.dashboard-hub-launcher-body.is-tool > .dashboard-hub-launcher-filehost,
+.dashboard-hub-launcher-body.is-tool > .dashboard-hub-launcher-dashboards {
+  height: 100%;
+  min-height: 0;
+}
+
+/* Mobile: single-column list and thumb-sized rows/controls. */
+.is-mobile .dashboard-hub-launcher-dashboard-list {
+  grid-template-columns: 1fr;
+}
+.is-mobile .dashboard-hub-launcher-filesearch input {
+  height: 44px;
+  font-size: 16px;
+}
+.is-mobile .dashboard-hub-launcher-fileback {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  touch-action: manipulation;
+}
+
+/* File tool in the launcher: no cell chrome to reserve space for, so drop the
+   64px reservation the dashboard header needs. */
+.dashboard-hub-launcher-filebody .dashboard-hub-db-file-header {
+  padding-right: 8px;
+}
+.is-mobile .dashboard-hub-launcher-filebody .dashboard-hub-db-file-header {
+  gap: 4px;
+  padding: 4px;
+}
+.is-mobile .dashboard-hub-launcher-filebody .dashboard-hub-db-markdown-open {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  place-items: center;
+  touch-action: manipulation;
+}
+.is-mobile .dashboard-hub-db-memo-rail {
+  flex: 0 0 44px;
+  touch-action: manipulation;
+}
+
+/* "Done typing" button — see KeyboardDoneButton.tsx. Lives in a dialog header
+   because that is the one region the on-screen keyboard never covers. Styled
+   loud on purpose: it appears mid-typing and needs to read as the way out. */
+.dashboard-hub-keyboard-done {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: var(--font-ui-small);
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 2px 10px hsla(var(--interactive-accent-hsl), 0.5);
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: dashboard-hub-keyboard-done-in 160ms ease-out,
+    dashboard-hub-keyboard-done-pulse 1.6s ease-in-out 160ms infinite;
+}
+.dashboard-hub-keyboard-done:hover,
+.dashboard-hub-keyboard-done:active {
+  background: var(--interactive-accent-hover);
+}
+@keyframes dashboard-hub-keyboard-done-in {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes dashboard-hub-keyboard-done-pulse {
+  0%, 100% { box-shadow: 0 2px 10px hsla(var(--interactive-accent-hsl), 0.5); }
+  50% { box-shadow: 0 2px 16px hsla(var(--interactive-accent-hsl), 0.95); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-hub-keyboard-done { animation: none; }
+}
+
+/* The compact unlock dialog has no title bar, so it gets a small header row. */
+.dashboard-hub-db-secret-compact-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Keep the header from crushing the title when the button appears. */
+.dashboard-hub-db-secret-dialog-title:has(.dashboard-hub-keyboard-done) .dashboard-hub-db-secret-dialog-heading small {
+  display: none;
+}
+
+/* Dashboard toolbar on mobile: thumb-sized buttons. */
+.is-mobile .dashboard-hub-db-toolbtn {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 10px;
+  touch-action: manipulation;
+}
+
+/* ===================================================================== */
+/* iOS zoom guard                                                        */
+/* ===================================================================== */
+
+/* iOS Safari zooms the entire page whenever a focused field's font-size is
+   under 16px, and Obsidian's --font-ui-* scale is well below that. The zoom
+   pushes everything below the field outside the visual viewport, which reads
+   as "the list disappeared" — and it comes back on blur when the zoom resets.
+   This is a blanket rule on purpose: every field this plugin renders is
+   covered, so a newly added input cannot reintroduce the bug. */
+.is-mobile [class*="dashboard-hub-"] input:not([type="checkbox"]):not([type="radio"]),
+.is-mobile [class*="dashboard-hub-"] textarea,
+.is-mobile [class*="dashboard-hub-"] select {
+  font-size: 16px;
+}
+
+/* Timeline filters on mobile: six stacked full-width rows overflowed the cell
+   (which clips with overflow:hidden), taking the list and the clear button
+   out of the visible — and tappable — area. Two columns, and the panel can
+   shrink and scroll so it never starves the list below it. */
+.is-mobile .dashboard-hub-db-timeline-filters {
+  grid-template-columns: 1fr 1fr;
+  flex: 0 1 auto;
+  max-height: 55%;
+  overflow-y: auto;
+  gap: 8px;
+  padding: 8px;
+}
+.is-mobile .dashboard-hub-db-timeline-filters > input:nth-child(1),
+.is-mobile .dashboard-hub-db-timeline-filters > input:nth-child(2) {
+  grid-column: 1 / -1;
+}
+.is-mobile .dashboard-hub-db-timeline-filters input:not([type="checkbox"]) {
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 10px;
+}
+.is-mobile .dashboard-hub-db-timeline-filters label {
+  min-height: 40px;
+  font-size: var(--font-ui-small);
+}
+.is-mobile .dashboard-hub-db-timeline-filters label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+/* The bare icon button was a ~22px target at the end of a clipped stack. */
+.is-mobile .dashboard-hub-db-timeline-filters > .dashboard-hub-db-timeline-iconbtn {
+  display: inline-flex;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  touch-action: manipulation;
+}
+
+/* Widget-level search fields (Secret Manager toolbar) need thumb-sized rows
+   too — these live in a dashboard cell, not a dialog. */
+.is-mobile .dashboard-hub-db-secret-search input {
+  height: 44px;
+}
+
+/* ===================================================================== */
+/* Obsidian mobile keyboard padding                                      */
+/* ===================================================================== */
+
+/* When the on-screen keyboard opens, Obsidian mobile pads `.view-content`
+   at the bottom by roughly the keyboard height so a focused field near the
+   bottom of a scrolling note stays visible. Measured on an iPhone: the view
+   was 433px tall with 308px of that padding, leaving our grid's scroll area
+   56px of the 632px it needed — the widget list simply had nowhere to render,
+   which is why focusing a widget's search field made everything below it
+   vanish and blurring brought it back.
+
+   This view does not need that padding: its own scroll containers handle
+   scrolling, and every text form it opens is a top-anchored modal (see the
+   mobile modal convention at the top of this file). `!important` is required
+   because Obsidian sets the padding inline. */
+.is-mobile .workspace-leaf-content[data-type="hub-dashboard-view"] .view-content,
+.is-mobile .workspace-leaf-content[data-type="dashboard-hub-kanban-view"] .view-content {
+  padding-bottom: 0 !important;
 }

@@ -1,7 +1,7 @@
 // Modal for creating a new kanban card. Collects a title and a target column
 // (status); the widget turns the result into a note matching the board filters.
 
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal, Platform, Setting } from "obsidian";
 import { t } from "src/i18n";
 
 interface ColumnOpt {
@@ -18,6 +18,7 @@ export class KanbanNewCardModal extends Modal {
   private title = "";
   private status: string;
   private submitted = false;
+  private removeViewportListeners: (() => void) | null = null;
 
   constructor(
     app: App,
@@ -29,7 +30,33 @@ export class KanbanNewCardModal extends Modal {
   }
 
   onOpen(): void {
-    const { contentEl } = this;
+    const { contentEl, modalEl } = this;
+    modalEl.addClass("dashboard-hub-db-kanban-new-card-modal");
+    contentEl.addEventListener("pointerdown", (event) => {
+      if ((event.target as Element).closest("button")) event.preventDefault();
+    });
+
+    if (Platform.isMobile) {
+      const win = modalEl.ownerDocument.defaultView ?? window;
+      const viewport = win.visualViewport;
+      const updateKeyboardInset = () => {
+        const inset = viewport
+          ? Math.max(0, win.innerHeight - viewport.height - viewport.offsetTop)
+          : 0;
+        modalEl.style.setProperty("--dashboard-hub-db-kanban-keyboard-inset", `${inset}px`);
+      };
+      updateKeyboardInset();
+      viewport?.addEventListener("resize", updateKeyboardInset);
+      viewport?.addEventListener("scroll", updateKeyboardInset);
+      win.addEventListener("resize", updateKeyboardInset);
+      this.removeViewportListeners = () => {
+        viewport?.removeEventListener("resize", updateKeyboardInset);
+        viewport?.removeEventListener("scroll", updateKeyboardInset);
+        win.removeEventListener("resize", updateKeyboardInset);
+        modalEl.style.removeProperty("--dashboard-hub-db-kanban-keyboard-inset");
+      };
+    }
+
     contentEl.createEl("h3", { text: t("dashboard.kanbanNewCardTitle") });
 
     let titleInput: HTMLInputElement | null = null;
@@ -73,6 +100,9 @@ export class KanbanNewCardModal extends Modal {
   }
 
   onClose(): void {
+    this.removeViewportListeners?.();
+    this.removeViewportListeners = null;
+    this.modalEl.removeClass("dashboard-hub-db-kanban-new-card-modal");
     this.contentEl.empty();
   }
 }

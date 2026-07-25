@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Copy, Eye, ExternalLink, FileKey2, Folder, KeyRound, Loader2, Pencil, Plus, Search, X } from "lucide-react";
-import { Notice, TFile, TFolder, type TAbstractFile } from "obsidian";
+import { Notice, Platform, TFile, TFolder, type TAbstractFile } from "obsidian";
 import { t } from "src/i18n";
 import { filesInVaultFolder, pathIsInVaultFolder } from "src/utils/vaultFiles";
 import type { WidgetContext } from "../types";
@@ -17,6 +18,7 @@ import {
   unwrapEncryptedFile,
 } from "src/core/crypto";
 import { cryptoCache } from "src/core/cryptoCache";
+import { KeyboardDoneButton } from "src/ui/components/KeyboardDoneButton";
 
 interface SecretEntry {
   file: TFile;
@@ -158,6 +160,9 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({});
+  const rootRef = useRef<HTMLDivElement>(null);
+  const createOverlayRef = useRef<HTMLDivElement>(null);
+  const passwordOverlayRef = useRef<HTMLDivElement>(null);
 
   const isSecretPath = useCallback((path: string) =>
     path.toLocaleLowerCase().endsWith(".encrypted") && pathIsInVaultFolder(path, folder), [folder]);
@@ -191,6 +196,35 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
   }, [ctx, folder, readEntry]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  // The overlays are portalled out of the widget, so the inset lives on the
+  // portal host and every overlay inherits it. Tracks all three dialogs, not
+  // just the create one.
+  useEffect(() => {
+    if (!Platform.isMobile) return;
+    if (!createOpen && !viewing && !passwordEntry) return;
+    const host = (rootRef.current?.closest(".modal") ?? rootRef.current?.ownerDocument.body) as HTMLElement | null;
+    if (!host) return;
+    const win = host.ownerDocument.defaultView ?? window;
+    const viewport = win.visualViewport;
+
+    const updateKeyboardInset = () => {
+      const inset = viewport
+        ? Math.max(0, win.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+      host.style.setProperty("--dashboard-hub-db-secret-keyboard-inset", `${inset}px`);
+    };
+
+    updateKeyboardInset();
+    viewport?.addEventListener("resize", updateKeyboardInset);
+    viewport?.addEventListener("scroll", updateKeyboardInset);
+    win.addEventListener("resize", updateKeyboardInset);
+    return () => {
+      viewport?.removeEventListener("resize", updateKeyboardInset);
+      viewport?.removeEventListener("scroll", updateKeyboardInset);
+      win.removeEventListener("resize", updateKeyboardInset);
+      host.style.removeProperty("--dashboard-hub-db-secret-keyboard-inset");
+    };
+  }, [createOpen, viewing, passwordEntry]);
   useEffect(() => {
     if (!ctx) return;
     const removePath = (path: string) => setEntries((current) =>
@@ -359,8 +393,55 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
   }
 
   if (!ctx) return null;
+  const createOverlay = createOpen && (
+    <div ref={createOverlayRef} className="dashboard-hub-db-secret-overlay is-create" onClick={() => setCreateOpen(false)}>
+      <form
+        className="dashboard-hub-db-secret-dialog"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={(event) => {
+          if ((event.target as Element).closest("button")) event.preventDefault();
+        }}
+        onSubmit={(event) => void createSecret(event)}
+      >
+        <div className="dashboard-hub-db-secret-dialog-title">
+          <div className="dashboard-hub-db-secret-dialog-heading">
+            <span className="dashboard-hub-db-secret-dialog-icon"><KeyRound size={18} /></span>
+            <div>
+              <strong>{t("dashboard.secretNew")}</strong>
+              <small>{t("dashboard.secretNewHint")}</small>
+            </div>
+          </div>
+          <KeyboardDoneButton containerRef={createOverlayRef} />
+          <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => setCreateOpen(false)}><X size={16} /></button>
+        </div>
+        <div className="dashboard-hub-db-secret-dialog-body">
+          <label>{t("dashboard.secretName")}<input autoFocus required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+          <label>{t("dashboard.secretDescription")}<input value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+          <MetadataEditor value={draft.metadata} onChange={(metadata) => setDraft({ ...draft, metadata })} />
+          <label>{t("dashboard.secretValue")}<textarea required rows={1} className="is-secret" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} /></label>
+          <label>{t("dashboard.secretPassword")}<input required type="password" value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} /></label>
+          {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
+        </div>
+        <div className="dashboard-hub-db-secret-dialog-footer">
+          <button type="button" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</button>
+          <button className="dashboard-hub-db-primary-btn" type="submit" disabled={saving || !createPassword}>{saving ? t("dashboard.secretSaving") : t("dashboard.save")}</button>
+        </div>
+      </form>
+    </div>
+  );
+  const mobileOverlayTarget = Platform.isMobile
+    ? rootRef.current?.closest(".modal") ?? rootRef.current?.ownerDocument.body
+    : null;
+  // Every overlay has to leave the widget cell on mobile: the overlay is
+  // position:absolute, so inside a grid cell it is clipped to that cell and
+  // the on-screen keyboard pushes its content out of view entirely.
+  const mountOverlay = (node: ReactNode) =>
+    Platform.isMobile && mobileOverlayTarget && node ? createPortal(node, mobileOverlayTarget) : node;
+
   return (
-    <div className="dashboard-hub-db-secret-manager">
+    <div ref={rootRef} className="dashboard-hub-db-secret-manager">
       <div className="dashboard-hub-db-secret-toolbar">
         <div className="dashboard-hub-db-secret-search">
           <Search size={15} aria-hidden="true" />
@@ -382,54 +463,30 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
         </div>
       )}
 
-      {viewing && (
+      {mountOverlay(viewing && (
         <SecretViewDialog
           entry={viewing}
           ctx={ctx}
           onClose={() => setViewing(null)}
           onSaved={async () => { await refresh(); setViewing(null); }}
         />
-      )}
+      ))}
 
-      {createOpen && (
-        <div className="dashboard-hub-db-secret-overlay" onClick={() => setCreateOpen(false)}>
-          <form className="dashboard-hub-db-secret-dialog" onClick={(event) => event.stopPropagation()} onSubmit={(event) => void createSecret(event)}>
-            <div className="dashboard-hub-db-secret-dialog-title">
-              <div className="dashboard-hub-db-secret-dialog-heading">
-                <span className="dashboard-hub-db-secret-dialog-icon"><KeyRound size={18} /></span>
-                <div>
-                  <strong>{t("dashboard.secretNew")}</strong>
-                  <small>{t("dashboard.secretNewHint")}</small>
-                </div>
-              </div>
-              <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => setCreateOpen(false)}><X size={16} /></button>
-            </div>
-            <div className="dashboard-hub-db-secret-dialog-body">
-              <label>{t("dashboard.secretName")}<input autoFocus required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
-              <label>{t("dashboard.secretDescription")}<input value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
-              <MetadataEditor value={draft.metadata} onChange={(metadata) => setDraft({ ...draft, metadata })} />
-              <label>{t("dashboard.secretValue")}<textarea required rows={1} className="is-secret" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} /></label>
-              <label>{t("dashboard.secretPassword")}<input required type="password" value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} /></label>
-              {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
-            </div>
-            <div className="dashboard-hub-db-secret-dialog-footer">
-              <button type="button" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</button>
-              <button className="dashboard-hub-db-primary-btn" type="submit" disabled={saving || !createPassword}>{saving ? t("dashboard.secretSaving") : t("dashboard.save")}</button>
-            </div>
-          </form>
-        </div>
-      )}
+      {mountOverlay(createOverlay)}
 
-      {passwordEntry && (
-        <div className="dashboard-hub-db-secret-overlay" onClick={() => setPasswordEntry(null)}>
+      {mountOverlay(passwordEntry && (
+        <div ref={passwordOverlayRef} className="dashboard-hub-db-secret-overlay" onClick={() => setPasswordEntry(null)}>
           <form className="dashboard-hub-db-secret-dialog is-compact" onClick={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); void copyDecrypted(passwordEntry, password); }}>
-            <strong>{t("dashboard.secretPassword")}</strong>
+            <div className="dashboard-hub-db-secret-compact-head">
+              <strong>{t("dashboard.secretPassword")}</strong>
+              <KeyboardDoneButton containerRef={passwordOverlayRef} />
+            </div>
             <input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
             {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
             <button className="dashboard-hub-db-primary-btn" type="submit" disabled={!password || copying !== null}>{t("dashboard.secretUnlockCopy")}</button>
           </form>
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -452,6 +509,7 @@ function SecretViewDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [editMode, setEditMode] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<SecretDraft>({
     name: entry.name,
     description: entry.description,
@@ -553,7 +611,7 @@ function SecretViewDialog({
   };
 
   return (
-    <div className="dashboard-hub-db-secret-overlay" onClick={onClose}>
+    <div ref={overlayRef} className="dashboard-hub-db-secret-overlay" onClick={onClose}>
       <div className="dashboard-hub-db-secret-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="dashboard-hub-db-secret-dialog-title">
           <div className="dashboard-hub-db-secret-dialog-heading">
@@ -564,6 +622,7 @@ function SecretViewDialog({
             </div>
           </div>
           <div className="dashboard-hub-db-secret-dialog-title-actions">
+            <KeyboardDoneButton containerRef={overlayRef} />
             <button type="button" className="dashboard-hub-db-iconbtn" onClick={openFile} title={t("dashboard.openFile")} aria-label={t("dashboard.openFile")}><ExternalLink size={16} /></button>
             <button type="button" className="dashboard-hub-db-iconbtn" onClick={onClose} aria-label={t("dashboard.cancel")}><X size={16} /></button>
           </div>

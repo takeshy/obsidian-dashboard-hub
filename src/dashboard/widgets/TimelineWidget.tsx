@@ -453,6 +453,8 @@ export default function TimelineWidget({
   const [wikiPosition, setWikiPosition] = useState<WikiSuggestionPosition | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const editInputRef = useRef<HTMLInputElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -536,6 +538,41 @@ export default function TimelineWidget({
   useEffect(() => {
     resizeTextarea(textareaRef.current);
   }, [draft, composerOpen]);
+
+  // Focus the draft textarea when the composer opens. Deferred a tick so the
+  // portal (and Obsidian's modal focus trap, when hosted in the launcher) has
+  // settled before we take focus.
+  useEffect(() => {
+    if (!composerOpen) return;
+    const timer = window.setTimeout(() => textareaRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [composerOpen]);
+
+  useEffect(() => {
+    if (!Platform.isMobile || !composerOpen) return;
+    const composerEl = composerRef.current;
+    if (!composerEl) return;
+    const win = composerEl.ownerDocument.defaultView ?? window;
+    const viewport = win.visualViewport;
+
+    const updateKeyboardInset = () => {
+      const inset = viewport
+        ? Math.max(0, win.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+      composerEl.style.setProperty("--dashboard-hub-db-timeline-keyboard-inset", `${inset}px`);
+    };
+
+    updateKeyboardInset();
+    viewport?.addEventListener("resize", updateKeyboardInset);
+    viewport?.addEventListener("scroll", updateKeyboardInset);
+    win.addEventListener("resize", updateKeyboardInset);
+    return () => {
+      viewport?.removeEventListener("resize", updateKeyboardInset);
+      viewport?.removeEventListener("scroll", updateKeyboardInset);
+      win.removeEventListener("resize", updateKeyboardInset);
+      composerEl.style.removeProperty("--dashboard-hub-db-timeline-keyboard-inset");
+    };
+  }, [composerOpen]);
 
   useEffect(() => {
     resizeTextarea(editTextareaRef.current);
@@ -900,8 +937,59 @@ export default function TimelineWidget({
       : menu;
   };
 
+  const composer = composerOpen && (
+    <div
+      ref={composerRef}
+      className={`dashboard-hub-db-timeline-composer${Platform.isMobile ? " is-mobile-modal" : ""}`}
+      role={Platform.isMobile ? "dialog" : undefined}
+      aria-modal={Platform.isMobile ? true : undefined}
+    >
+      <div className="dashboard-hub-db-timeline-textarea-wrap is-composer">
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            resizeTextarea(e.target);
+            updateWikiSuggestions(e.target.value, e.target.selectionStart, "draft", e.target);
+          }}
+          onKeyDown={(e) => {
+            handleWikiKeyDown(e);
+          }}
+          placeholder={t("dashboard.timelinePlaceholder")}
+        />
+        {renderWikiSuggestions("draft")}
+      </div>
+      {renderImages(images)}
+      <div className="dashboard-hub-db-timeline-composer-actions">
+        <input ref={inputRef} type="file" accept="image/*" multiple onChange={(e) => addImages(e.target.files)} />
+        <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={closeComposer} title={t("dashboard.cancel")}>
+          <X size={14} />
+        </button>
+        <div className="dashboard-hub-db-timeline-composer-primary-actions">
+          {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => openAiRewrite("draft")} title={t("dashboard.timelineAiEdit")}>
+            <Sparkles size={14} />
+          </button>}
+          <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => inputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
+            <Image size={14} />
+          </button>
+          <button type="button" className="dashboard-hub-db-timeline-post" {...keepFocusProps} disabled={posting || (!draft.trim() && images.length === 0)} onClick={() => void submitPost()}>
+            {posting ? <Loader2 size={13} className="is-spinning" /> : <Send size={13} />}
+            {t("dashboard.timelinePost")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  // When Timeline is inside ToolLauncherModal, keep the composer portal inside
+  // that Obsidian modal. Portaling to document.body puts the textarea outside
+  // Obsidian's focus trap, which immediately steals focus back on every click.
+  const mobileComposerTarget = Platform.isMobile
+    ? rootRef.current?.closest(".modal") ?? rootRef.current?.ownerDocument.body
+    : null;
+
   return (
-    <div className="dashboard-hub-db-timeline">
+    <div ref={rootRef} className="dashboard-hub-db-timeline">
       <div className="dashboard-hub-db-timeline-header">
         <div className="dashboard-hub-db-timeline-title">{name}</div>
         {error && <div className="dashboard-hub-db-timeline-error">{error}</div>}
@@ -1080,45 +1168,21 @@ export default function TimelineWidget({
         )}
       </div>
 
-      {composerOpen && (
-        <div className="dashboard-hub-db-timeline-composer">
-          <div className="dashboard-hub-db-timeline-textarea-wrap is-composer">
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                resizeTextarea(e.target);
-                updateWikiSuggestions(e.target.value, e.target.selectionStart, "draft", e.target);
-              }}
-              onKeyDown={(e) => {
-                handleWikiKeyDown(e);
-              }}
-              placeholder={t("dashboard.timelinePlaceholder")}
+      {Platform.isMobile && composerOpen && mobileComposerTarget
+        ? createPortal(
+          <>
+            <button
+              type="button"
+              className="dashboard-hub-db-timeline-composer-backdrop"
+              {...keepFocusProps}
+              aria-label={t("dashboard.cancel")}
+              onClick={closeComposer}
             />
-            {renderWikiSuggestions("draft")}
-          </div>
-          {renderImages(images)}
-          <div className="dashboard-hub-db-timeline-composer-actions">
-            <input ref={inputRef} type="file" accept="image/*" multiple onChange={(e) => addImages(e.target.files)} />
-            <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={closeComposer} title={t("dashboard.cancel")}>
-              <X size={14} />
-            </button>
-            <div className="dashboard-hub-db-timeline-composer-primary-actions">
-              {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => openAiRewrite("draft")} title={t("dashboard.timelineAiEdit")}>
-                <Sparkles size={14} />
-              </button>}
-              <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => inputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
-                <Image size={14} />
-              </button>
-              <button type="button" className="dashboard-hub-db-timeline-post" disabled={posting || (!draft.trim() && images.length === 0)} onClick={() => void submitPost()}>
-                {posting ? <Loader2 size={13} className="is-spinning" /> : <Send size={13} />}
-                {t("dashboard.timelinePost")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            {composer}
+          </>,
+          mobileComposerTarget,
+        )
+        : composer}
 
       <div className="dashboard-hub-db-timeline-footer">
         <button type="button" className="dashboard-hub-db-timeline-new" onClick={() => setComposerOpen(true)} disabled={composerOpen}>

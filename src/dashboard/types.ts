@@ -91,6 +91,8 @@ export interface WidgetContext {
   requestMaximize?: (onRestore?: () => void) => void;
   /** Restore this widget from temporary maximized display. */
   restoreMaximized?: () => void;
+  /** Close a modal host before navigating away (for launcher-hosted widgets). */
+  closeHost?: () => void;
 }
 
 export interface ConfigEditorProps {

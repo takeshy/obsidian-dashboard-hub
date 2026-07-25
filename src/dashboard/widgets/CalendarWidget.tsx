@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, CalendarPlus, ChevronLeft, ChevronRight, Clock3, MessageCircle, Plus, X } from "lucide-react";
-import { Notice, TFile } from "obsidian";
+import { Notice, Platform, TFile } from "obsidian";
 import { t } from "src/i18n";
 import type { WidgetContext } from "../types";
 import { DASHBOARD_FOLDER } from "../types";
@@ -92,6 +92,10 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
   const [savingEvent, setSavingEvent] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const modalBackdropRef = useRef<HTMLDivElement>(null);
+  const keepFormFocusProps = {
+    onPointerDown: (event: React.PointerEvent) => event.preventDefault(),
+  };
 
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   useEffect(() => {
@@ -167,6 +171,31 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [detailOpen]);
+  useEffect(() => {
+    if (!Platform.isMobile || !detailOpen || !showEventForm) return;
+    const backdrop = modalBackdropRef.current;
+    if (!backdrop) return;
+    const win = backdrop.ownerDocument.defaultView ?? window;
+    const viewport = win.visualViewport;
+
+    const updateKeyboardInset = () => {
+      const inset = viewport
+        ? Math.max(0, win.innerHeight - viewport.height - viewport.offsetTop)
+        : 0;
+      backdrop.style.setProperty("--dashboard-hub-db-calendar-keyboard-inset", `${inset}px`);
+    };
+
+    updateKeyboardInset();
+    viewport?.addEventListener("resize", updateKeyboardInset);
+    viewport?.addEventListener("scroll", updateKeyboardInset);
+    win.addEventListener("resize", updateKeyboardInset);
+    return () => {
+      viewport?.removeEventListener("resize", updateKeyboardInset);
+      viewport?.removeEventListener("scroll", updateKeyboardInset);
+      win.removeEventListener("resize", updateKeyboardInset);
+      backdrop.style.removeProperty("--dashboard-hub-db-calendar-keyboard-inset");
+    };
+  }, [detailOpen, showEventForm]);
   const goToday = () => {
     const now = new Date();
     setShowEventForm(false);
@@ -256,7 +285,7 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
         </button>;
       })}
     </div>
-    {detailOpen && createPortal(<div className="dashboard-hub-db-calendar-modal-backdrop" onMouseDown={() => setDetailOpen(false)}>
+    {detailOpen && createPortal(<div ref={modalBackdropRef} className={`dashboard-hub-db-calendar-modal-backdrop${showEventForm ? " is-event-form-open" : ""}`} onMouseDown={() => setDetailOpen(false)}>
       <div className="dashboard-hub-db-calendar-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
         <button type="button" className="dashboard-hub-db-calendar-modal-close" aria-label={t("common.close")} onClick={() => setDetailOpen(false)}><X size={18} /></button>
         <div className="dashboard-hub-db-calendar-detail">
@@ -265,7 +294,7 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
         <div className="dashboard-hub-db-calendar-event-form-title"><span><CalendarPlus size={16} />{t("dashboard.calendarEventFormTitle")}</span><strong>{selected}</strong></div>
         <label className="dashboard-hub-db-calendar-event-time-field"><span>{t("dashboard.calendarEventTimeOptional")}</span><input type="time" value={eventTime} onChange={(event) => setEventTime(event.target.value)} /></label>
         <label className="dashboard-hub-db-calendar-event-content-field"><span>{t("dashboard.calendarEventContent")}</span><textarea value={eventText} onChange={(event) => setEventText(event.target.value)} placeholder={t("dashboard.calendarEventPlaceholder")} autoFocus /></label>
-        <div className="dashboard-hub-db-calendar-event-form-actions"><button type="button" onClick={() => { setShowEventForm(false); setEventText(""); setEventTime(""); }}>{t("dashboard.cancel")}</button><button type="submit" className="mod-cta" disabled={!eventText.trim() || savingEvent}>{savingEvent ? t("dashboard.calendarEventSaving") : t("dashboard.calendarEventSave")}</button></div>
+        <div className="dashboard-hub-db-calendar-event-form-actions"><button type="button" {...keepFormFocusProps} onClick={() => { setShowEventForm(false); setEventText(""); setEventTime(""); }}>{t("dashboard.cancel")}</button><button type="submit" className="mod-cta" {...keepFormFocusProps} disabled={!eventText.trim() || savingEvent}>{savingEvent ? t("dashboard.calendarEventSaving") : t("dashboard.calendarEventSave")}</button></div>
       </form>}
       {events.length > 0 && ctx && <section className="dashboard-hub-db-calendar-events"><h5><Clock3 size={14} />{t("dashboard.calendarEvents")} <span>{events.length}</span></h5>{events.map((event) => <article key={event.id}><div className="dashboard-hub-db-calendar-event-date"><span>{t("dashboard.calendarEventDate")}</span><input type="date" value={event.eventDate} onChange={(change) => void changeEventDate(event, change.target.value)} /></div><ObsidianMarkdown app={ctx.app} markdown={event.content} sourcePath={`${timelineRoot}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
       {events.length === 0 && timelinePosts.length === 0 && !showEventForm ? <div className="dashboard-hub-db-widget-empty">{t("dashboard.calendarEmpty")}</div> : <>
