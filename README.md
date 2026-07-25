@@ -120,6 +120,8 @@ The core activity tools also run on their own. The launcher opens Dashboard,
 Workflow, Timeline, Calendar, MemoList, Kanban, and Secret Manager without
 building a full dashboard first.
 
+![Dashboard Hub launcher for opening each activity tool directly](docs/images/dashboard-launcher.png)
+
 ## Get started
 
 1. Install and enable Dashboard Hub. It requires Obsidian 1.10.0 or later.

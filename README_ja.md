@@ -117,6 +117,8 @@ Obsidian Bases、ノート、文書、Webサイト、タスク、予定をひと
 Timeline、Calendar、MemoList、Kanban、Secret Managerを直接開けるため、完全な
 ダッシュボードを作る必要はありません。
 
+![各アクティビティツールを直接開くDashboard Hubランチャー](docs/images/dashboard-launcher.png)
+
 ## はじめる
 
 1. Dashboard Hubをインストールして有効にします。Obsidian 1.10.0以降が必要です。
