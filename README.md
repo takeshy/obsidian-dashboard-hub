@@ -2,26 +2,19 @@
 
 [English](README.md) | [日本語](README_ja.md)
 
-**Your vault, on one screen — with a record of the work that matters.**
-
-Dashboard Hub is an Obsidian plugin built around a single idea: the tools you
-work in should leave a trail. Move a Kanban card, reschedule an event, or save a
-reading memo, and Dashboard Hub writes it to a Timeline — a dated, plain
-Markdown log of your activity that lives in your vault and belongs to you.
-
-Around that log sit the tools that feed it: Obsidian Bases, Kanban boards,
-Calendars, a reading workspace for PDFs and EPUBs, embedded web pages, and a
-password-protected Secret Manager for the credentials you reach for every day.
+Dashboard Hub puts Obsidian Bases, files, Kanban boards, Calendars, Timelines,
+web pages, reading memos, and encrypted secrets in one responsive dashboard.
+Supported actions such as moving a Kanban card or saving a memo can also be
+recorded in a dated Markdown Timeline.
 
 ![A Dashboard Hub workspace with Kanban, Calendar, and Timeline widgets](docs/images/dashboard-overview.png)
 
-Dashboard Hub works standalone. No AI account, no API key, no external database.
+It works without an AI account, API key, or external database.
 
-## The Timeline is the point
+## Activity Timeline
 
-Most dashboards show you the present. The Timeline widget accumulates your past.
-It is a chronological feed you can post to directly — tags, wikilinks, pinned
-posts, filters, image attachments — but it also fills itself as you work:
+You can post directly to a Timeline with tags, wikilinks, pinned posts, filters,
+and image attachments. Dashboard Hub can also add entries for these actions:
 
 | When you… | The Timeline records |
 | --- | --- |
@@ -32,75 +25,43 @@ posts, filters, image attachments — but it also fills itself as you work:
 
 ![Timeline showing Calendar events and automatically recorded reading memo activity](docs/images/dashboard-timeline.png)
 
-Entries are Obsidian callouts appended to
-`<Base directory>/Timeline/<name>/YYYY-MM-DD.md`, one file per day, separated
-by `---`. Nothing is hidden in a database: you can read last Tuesday in any text
-editor, grep it, back it up, or open it as a note.
+Entries are stored as Obsidian callouts in
+`<Base directory>/Timeline/<name>/YYYY-MM-DD.md`, one file per day. Calendar
+shows events and posts from a selected Timeline in a monthly view. Automatic
+memo, Kanban, and Calendar activity uses the global **Activity Timeline name**,
+which defaults to `Timeline`.
 
-Two things follow from that:
+## Secret Manager
 
-- **The Calendar is a view of the Timeline, not a separate store.** It collects
-  events and activity from a named Timeline into a monthly view with day details.
-- **Your activity log is a queryable file tree.** Ask "what did I do on the 12th?"
-  and the answer is one file. This makes the log a natural input for an AI plugin
-  that can read your vault (see [Optional: add AI](#optional-add-ai)).
+Secret Manager stores API keys, tokens, and other values as `.encrypted` files
+under `Secrets/` by default. Secrets can be searched by name and public metadata,
+copied, and edited in place. The password is cached in memory for the session.
 
-Automatic memo, Kanban, and Calendar activity is collected in one Timeline named
-`Timeline` by default. Change the global **Activity Timeline name** in Dashboard
-Hub settings to use a different log.
+It uses hybrid encryption: the public key can encrypt a value without a
+password, but the password-protected private key is required to decrypt it.
+Secret Manager is intended for convenient access inside a vault, not as a
+replacement for a dedicated password manager.
 
-## Secret Manager, one keystroke away
+## Reading memos
 
-The credentials you actually need during the day — API keys, tokens, and logins
-for things that have no business being in a browser vault — live in `.encrypted`
-files under `Secrets/`.
-
-Open the rocket launcher in the ribbon, pick **Secret Manager**, type part of an
-ID, and copy the value. Unlock a secret once and secrets protected with the same
-password require no additional prompt for the rest of the session. Each secret
-can carry its own metadata fields, and values can be edited in place.
-
-**How it works.** Every `.encrypted` file contains its own password-protected
-private key and salt, so there is no plugin-level keychain or vault-wide master
-file to lose. Secret values are encrypted with AES-GCM, and RSA-OAEP wraps the
-random data key. This separates write capability from unlock capability: data
-can be encrypted with the public key while the password-protected private key
-remains locked.
-
-New files declare crypto format version 1 and protect the private key using
-PBKDF2-SHA256 with 600,000 iterations. Older unversioned files remain readable
-with their original 100,000-iteration parameters. The session password is kept
-in memory only and cleared when the plugin unloads or Obsidian closes; decrypted
-private keys are used transiently during decryption. Nothing sensitive is
-written to plugin settings.
-
-Secret Manager is built for fast retrieval inside your vault. It is not a
-replacement for a hardened, audited password manager, and the security of a file
-is the security of the password you chose for it.
-
-## Read, annotate, and return to the source
-
-The File widget makes a dashboard a place to read, not just to survey. Open a
-PDF, EPUB, or Markdown note, select a passage, and save a memo with its quote
-context. Saved ranges are highlighted while the memo panel is open, and links
-jump back to the quoted text. MemoList gathers those annotations into one
-searchable index — and each memo also lands on the Timeline, so a month later
-you can see not just what you highlighted but when you were reading it.
+Open a PDF, EPUB, or Markdown note in the File widget, select text, and save a
+memo with its quote context. Saved ranges are highlighted while the memo panel
+is open, and selecting a memo jumps back to the source. MemoList provides a
+searchable index, and memo changes are recorded in the activity Timeline.
 
 ![Taking linked reading memos from a PDF](docs/images/dashboard-memos.gif)
 
-## Build the screen you want
+## Dashboards and layout
 
-Mix native Obsidian Bases, notes, documents, websites, tasks, and events in one
-view. Drag, resize, maximize, and configure widgets; undo and redo; arrange the
-whole layout into balanced rows or columns. Small-screen layouts are derived
-automatically. Edits save as you go.
+Widgets can be moved, resized, maximized, and configured. Layout changes support
+undo and redo, and widgets can be arranged into equal rows or columns. A
+small-screen layout is generated automatically. Changes are saved as you edit.
 
 ![Rearranging widgets on a dashboard](docs/images/dashboard-arrange.gif)
 
-Every dashboard is a readable YAML `.dashboard` file with a documented schema.
-It can be inspected, versioned, searched, and backed up with ordinary tools.
-There is no external database or service to keep running.
+Each dashboard is stored as a readable YAML `.dashboard` file with a documented
+schema. It can be inspected, versioned, searched, and backed up like other vault
+files.
 
 ## Widgets
 
@@ -116,9 +77,8 @@ There is no external database or service to keep running.
 | **Web Embed** | Any embeddable HTTP or HTTPS page, with a quick link to open it in the browser. |
 | **Workflow** | Run a connected Hub workflow and keep its Markdown or HTML output on the dashboard. |
 
-The core activity tools also run on their own. The launcher opens Dashboard,
-Workflow, Timeline, Calendar, MemoList, Kanban, and Secret Manager without
-building a full dashboard first.
+The launcher opens Dashboard, Workflow, Timeline, Calendar, MemoList, Kanban,
+and Secret Manager directly.
 
 ![Dashboard Hub launcher for opening each activity tool directly](docs/images/dashboard-launcher.png)
 
@@ -129,11 +89,8 @@ building a full dashboard first.
    dashboard** from the command palette.
 3. Choose **Add widget**, configure it, and drag or resize it into place.
 
-The default **Base directory** is `Dashboards`; change it in Dashboard Hub
-settings. Automatic memo, Kanban, and Calendar activity is collected in one
-Timeline named `Timeline` by default; its global name is configurable in the
-same settings. New dashboards and their supporting files use these locations
-below it:
+The default **Base directory** is `Dashboards` and can be changed in the plugin
+settings. New dashboards and supporting files use these locations:
 
 ```text
 Dashboards/
@@ -152,25 +109,19 @@ Korean, Portuguese, Italian, and German.
 
 ## Optional: add AI
 
-Dashboard Hub is fully usable on its own. If you also install a compatible
-Obsidian plugin, it can add AI actions without taking ownership of your
-dashboards. Search Obsidian's Community plugins for
+AI features are optional. Install one of these compatible plugins from
+Obsidian's Community plugins:
 **[Gemini Helper](https://github.com/takeshy/obsidian-gemini-helper)**,
 **[Local LLM Hub](https://github.com/takeshy/obsidian-local-llm-hub)**, or
-**[LLM Hub](https://github.com/takeshy/obsidian-llm-hub)** and install the one
-that fits your setup.
+**[LLM Hub](https://github.com/takeshy/obsidian-llm-hub)**.
 
-Connected plugins can answer questions about a selection or reading memo,
-generate or edit a Base, rewrite a Timeline post, and create, edit, or run
-Workflows. Dashboard Hub keeps the model picker, cancellation, validation,
-before/after review, and Apply flow; the connected plugin supplies the models and
-executes the request.
+Connected plugins provide the models and can answer questions about selected
+text or reading memos, generate or edit a Base, rewrite Timeline posts, and
+create, edit, or run Workflows.
 
-Because the configured activity Timeline is plain dated Markdown in your vault,
-an AI plugin with vault access can read it directly. Dashboard Hub publishes its
-Base directory and Timeline name to connected plugins, allowing date-based
-activity questions to read the requested day's file without scanning the entire
-history.
+Dashboard Hub shares its Base directory and activity Timeline name with the
+connected plugin. Date-based questions can therefore read the requested day's
+Markdown file without scanning the full history.
 
 ## Install from source
 
