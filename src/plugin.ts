@@ -13,6 +13,7 @@ import { cryptoCache } from "src/core/cryptoCache";
 import { DashboardView, DASHBOARD_VIEW_TYPE } from "src/ui/DashboardView";
 import { KanbanView, KANBAN_VIEW_TYPE } from "src/ui/KanbanView";
 import { ToolLauncherModal, type LauncherTool } from "src/ui/ToolLauncherModal";
+import { CreateDashboardModal } from "src/ui/CreateDashboardModal";
 import {
   createEmptyDashboard,
   dashboardPath,
@@ -134,7 +135,7 @@ export class DashboardHubPlugin extends Plugin {
     this.addCommand({
       id: "create-dashboard",
       name: "Create dashboard",
-      callback: () => void this.createDashboard(),
+      callback: () => this.promptCreateDashboard(),
     });
     for (const tool of ["workflow", "timeline", "calendar", "memo-list", "kanban", "secret-manager"] as LauncherTool[]) {
       this.addCommand({
@@ -301,6 +302,7 @@ export class DashboardHubPlugin extends Plugin {
   async createDashboard(requestedName = "Dashboard"): Promise<TFile | null> {
     const baseName = requestedName
       .trim()
+      .replace(/\.dashboard$/i, "")
       .replace(/[\\/:*?"<>|#^[\]]/g, " ")
       .replace(/\s+/g, " ")
       .trim() || "Dashboard";
@@ -320,6 +322,10 @@ export class DashboardHubPlugin extends Plugin {
       new Notice(`Failed to create dashboard: ${String(error)}`);
       return null;
     }
+  }
+
+  promptCreateDashboard(): void {
+    new CreateDashboardModal(this.app, (fileName) => this.createDashboard(fileName)).open();
   }
 
   private registerIntegrationEvents(): void {

@@ -97,7 +97,7 @@ function DashboardLauncher({ plugin, onClose }: { plugin: DashboardHubPlugin; on
   };
   const create = () => {
     onClose();
-    void plugin.createDashboard();
+    plugin.promptCreateDashboard();
   };
 
   return <div className="dashboard-hub-launcher-dashboards">

@@ -121,6 +121,13 @@ export function DashboardEditor({
       });
     }
 
+    if (dashboards.length > 0) menu.addSeparator();
+    menu.addItem((item) => {
+      item.setTitle(t("launcher.dashboardCreate"));
+      item.setIcon("plus");
+      item.onClick(() => plugin.promptCreateDashboard());
+    });
+
     menu.showAtMouseEvent(event.nativeEvent);
   };
 
