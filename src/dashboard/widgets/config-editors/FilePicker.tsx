@@ -92,58 +92,58 @@ export function FilePicker({
   };
 
   return (
-    <div className="llm-hub-db-picker" ref={wrapperRef}>
+    <div className="dashboard-hub-db-picker" ref={wrapperRef}>
       <button
         type="button"
-        className="llm-hub-db-picker-button"
+        className="dashboard-hub-db-picker-button"
         onClick={() => setOpen((o) => !o)}
         title={value || placeholder || t("dashboard.selectPlaceholder")}
       >
-        <FileText size={13} className="llm-hub-db-picker-leadicon" />
-        <span className="llm-hub-db-picker-label">
+        <FileText size={13} className="dashboard-hub-db-picker-leadicon" />
+        <span className="dashboard-hub-db-picker-label">
           {value || placeholder || t("dashboard.selectPlaceholder")}
         </span>
         {value ? (
           <X
             size={13}
-            className="llm-hub-db-picker-clear"
+            className="dashboard-hub-db-picker-clear"
             onClick={(e) => {
               e.stopPropagation();
               onChange("");
             }}
           />
         ) : (
-          <ChevronDown size={13} className="llm-hub-db-picker-caret" />
+          <ChevronDown size={13} className="dashboard-hub-db-picker-caret" />
         )}
       </button>
 
       {open && (
-        <div className="llm-hub-db-picker-menu">
+        <div className="dashboard-hub-db-picker-menu">
           <input
             ref={inputRef}
             type="text"
-            className="llm-hub-db-picker-search"
+            className="dashboard-hub-db-picker-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder={searchPlaceholder || t("dashboard.searchPlaceholder")}
           />
-          <div className="llm-hub-db-picker-list">
+          <div className="dashboard-hub-db-picker-list">
             {filtered.length === 0 ? (
-              <div className="llm-hub-db-picker-empty">{t("dashboard.noFiles")}</div>
+              <div className="dashboard-hub-db-picker-empty">{t("dashboard.noFiles")}</div>
             ) : (
               filtered.map((p, i) => (
                 <button
                   type="button"
                   key={p}
-                  className={`llm-hub-db-picker-item${
+                  className={`dashboard-hub-db-picker-item${
                     p === value ? " is-selected" : ""
                   }${i === activeIndex ? " is-active" : ""}`}
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => select(p)}
                 >
-                  <FileText size={12} className="llm-hub-db-picker-itemicon" />
-                  <span className="llm-hub-db-picker-itemlabel">{p}</span>
+                  <FileText size={12} className="dashboard-hub-db-picker-itemicon" />
+                  <span className="dashboard-hub-db-picker-itemlabel">{p}</span>
                 </button>
               ))
             )}

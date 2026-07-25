@@ -14,8 +14,8 @@ export const DASHBOARD_SKILL: AgentSkillContribution = {
   ownerId: "dashboard-hub",
   id: "dashboard",
   name: "dashboard",
-  description: "Create Dashboard Hub .dashboard files and arrange Bases, files, workflows, kanban boards, timelines, calendars, memos, secrets, and web pages in a grid.",
-  revision: "1.0.0",
+  description: "Create Dashboard Hub .dashboard files, arrange widgets, and answer date-based questions from Timeline activity logs.",
+  revision: "1.1.0",
   dependencies: ["obsidian-bases"],
   instructions: `# Dashboard Hub Skill
 
@@ -49,16 +49,34 @@ The narrow \`sm\` layout is optional and is derived as a full-width stack when o
 - \`base\`: \`{ base: "Dashboards/Bases/Tasks.base" }\`. It always displays
   the first view in the Base file. Change that first view's \`type\` to select
   table, cards, or list presentation; do not add a \`view\` field.
-- \`file\`: \`{ path: "Notes/Home.md", showHeader: true }\`.
+- \`file\`: \`{ path: "Notes/Home.md", showHeader: true }\`. Memo create, update, and delete activity is written to the globally configured activity Timeline.
 - \`web\`: \`{ url: "https://example.com", showHeader: true }\`.
 - \`workflow\`: \`{ workflow: "workflows/Digest.md", output: "markdown", outputVariable: "result", refreshInterval: 0 }\`.
-- \`kanban\`: \`{ title: "Tasks", tag: "task", folder: "", statusProperty: "status", titleProperty: "", timelineName: "Timeline", columns: [{ value: "todo", label: "To Do" }, { value: "done", label: "Done" }], showUnspecified: true, displayFields: [] }\`.
+- \`kanban\`: \`{ title: "Tasks", tag: "task", folder: "", statusProperty: "status", titleProperty: "", columns: [{ value: "todo", label: "To Do" }, { value: "done", label: "Done" }], showUnspecified: true, displayFields: [] }\`. Status changes are written to the globally configured activity Timeline.
 - \`timeline\`: \`{ name: "Timeline", latestCount: 20 }\`.
 - \`calendar\`: \`{ timelineName: "Timeline" }\`. Calendar events use the named timeline; do not add a Files setting.
 - \`memo-list\`: \`{}\`.
 - \`secret-manager\`: \`{ folder: "Secrets" }\`.
 
 Unknown widget types are preserved but cannot render their content.
+
+## Timeline activity queries
+
+When the user asks what they did, changed, or recorded on a date, treat the
+globally configured activity Timeline as a syslog-style activity log. Its
+default name is \`Timeline\`.
+
+1. Read \`Dashboards/Timeline/<name>/YYYY-MM-DD.md\` for the requested date.
+2. Timeline files contain blocks separated by \`---\`. Each block starts with a
+   creation timestamp (or a \`timeline-post\` timestamp), followed by an \`id\` and
+   its Markdown body. Return the entries in timestamp order.
+3. Calendar events stay in the file for their scheduled day and contain
+   \`<!-- calendar-event: YYYY-MM-DD -->\`. Their leading timestamp tells when
+   the user recorded the event. Do not duplicate the event in its registration
+   day's activity merely because that timestamp is earlier.
+
+The requested day's Markdown file is the canonical source. Do not scan every
+historical Timeline file merely to answer a one-day question.
 
 ## Workflow
 
@@ -73,10 +91,10 @@ Do not add a view selector or \`config.view\`. A Base widget always renders and
 edits the first view defined in its \`.base\` file.`,
 };
 
-export function dashboardSkillForBaseDirectory(baseDirectory: string): AgentSkillContribution {
+export function dashboardSkillForBaseDirectory(baseDirectory: string, activityTimelineName = "Timeline"): AgentSkillContribution {
   return {
     ...DASHBOARD_SKILL,
-    instructions: DASHBOARD_SKILL.instructions.replace(/Dashboards/g, () => baseDirectory),
+    instructions: `${DASHBOARD_SKILL.instructions.replace(/Dashboards/g, () => baseDirectory)}\n\nRuntime activity Timeline name: \`${activityTimelineName}\`. Use this name for Timeline or Calendar widgets that display the activity log.`,
   };
 }
 

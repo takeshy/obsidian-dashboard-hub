@@ -25,21 +25,21 @@ export class TimelineLinkPreviewModal extends Modal {
 
   onOpen(): void {
     const { contentEl, modalEl } = this;
-    modalEl.addClass("llm-hub-db-timeline-link-modal");
+    modalEl.addClass("dashboard-hub-db-timeline-link-modal");
 
-    const header = contentEl.createDiv({ cls: "llm-hub-db-timeline-link-modal-header" });
+    const header = contentEl.createDiv({ cls: "dashboard-hub-db-timeline-link-modal-header" });
     header.createEl("h3", {
       text: this.file?.basename ?? this.target,
-      cls: "llm-hub-db-timeline-link-modal-title",
+      cls: "dashboard-hub-db-timeline-link-modal-title",
     });
 
-    const openBtn = header.createEl("button", { cls: "llm-hub-db-timeline-link-modal-open" });
+    const openBtn = header.createEl("button", { cls: "dashboard-hub-db-timeline-link-modal-open" });
     setIcon(openBtn, "lucide-external-link");
     openBtn.setAttribute("aria-label", t("input.openFile"));
     openBtn.addEventListener("click", () => this.openFile());
 
     const body = contentEl.createDiv({
-      cls: "llm-hub-db-timeline-link-modal-body markdown-rendered",
+      cls: "dashboard-hub-db-timeline-link-modal-body markdown-rendered",
     });
 
     if (!this.file) {
@@ -52,7 +52,7 @@ export class TimelineLinkPreviewModal extends Modal {
     if (this.file.extension.toLowerCase() !== "md") {
       body.createEl("p", { text: t("dashboard.binaryPreviewUnavailable") });
       const button = body.createEl("button", {
-        cls: "llm-hub-db-primary-btn",
+        cls: "dashboard-hub-db-primary-btn",
         text: t("dashboard.openFile"),
       });
       button.addEventListener("click", () => this.openFile());

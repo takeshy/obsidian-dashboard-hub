@@ -555,7 +555,7 @@ export default function TimelineWidget({
       const inset = viewport
         ? Math.max(0, win.innerHeight - viewport.height - viewport.offsetTop)
         : 0;
-      editEl.style.setProperty("--llm-hub-db-timeline-keyboard-inset", `${inset}px`);
+      editEl.style.setProperty("--dashboard-hub-db-timeline-keyboard-inset", `${inset}px`);
     };
 
     updateKeyboardInset();
@@ -566,7 +566,7 @@ export default function TimelineWidget({
       viewport?.removeEventListener("resize", updateKeyboardInset);
       viewport?.removeEventListener("scroll", updateKeyboardInset);
       win.removeEventListener("resize", updateKeyboardInset);
-      editEl.style.removeProperty("--llm-hub-db-timeline-keyboard-inset");
+      editEl.style.removeProperty("--dashboard-hub-db-timeline-keyboard-inset");
     };
   }, [editingPostId, editKeyboardFocused]);
 
@@ -858,9 +858,9 @@ export default function TimelineWidget({
   if (!ctx) return null;
 
   const renderImages = (items: PendingImage[], editing = false) => items.length > 0 && (
-    <div className="llm-hub-db-timeline-images">
+    <div className="dashboard-hub-db-timeline-images">
       {items.map((img, index) => (
-        <div className="llm-hub-db-timeline-image" key={img.previewUrl}>
+        <div className="dashboard-hub-db-timeline-image" key={img.previewUrl}>
           <img src={img.previewUrl} alt="" />
           <button type="button" onClick={() => removeImage(index, editing)} title={t("dashboard.remove")}>
             <X size={12} />
@@ -877,7 +877,7 @@ export default function TimelineWidget({
       ? { top: wikiPosition.top, left: wikiPosition.left, width: wikiPosition.width }
       : undefined;
     const menu = (
-      <div className={`llm-hub-db-timeline-wiki-suggestions${floating ? " is-floating" : ""}`} style={style}>
+      <div className={`dashboard-hub-db-timeline-wiki-suggestions${floating ? " is-floating" : ""}`} style={style}>
       {wikiSuggestions.map((suggestion, index) => (
         <button
           type="button"
@@ -901,17 +901,17 @@ export default function TimelineWidget({
   };
 
   return (
-    <div className="llm-hub-db-timeline">
-      <div className="llm-hub-db-timeline-header">
-        <div className="llm-hub-db-timeline-title">{name}</div>
-        {error && <div className="llm-hub-db-timeline-error">{error}</div>}
-        <button type="button" className="llm-hub-db-timeline-iconbtn" onClick={() => setShowFilters((v) => !v)} title={t("dashboard.timelineFilterWord")}>
+    <div className="dashboard-hub-db-timeline">
+      <div className="dashboard-hub-db-timeline-header">
+        <div className="dashboard-hub-db-timeline-title">{name}</div>
+        {error && <div className="dashboard-hub-db-timeline-error">{error}</div>}
+        <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => setShowFilters((v) => !v)} title={t("dashboard.timelineFilterWord")}>
           <Search size={14} />
         </button>
       </div>
 
       {showFilters && (
-        <div className="llm-hub-db-timeline-filters">
+        <div className="dashboard-hub-db-timeline-filters">
           <input value={wordInput} onChange={(e) => setWordInput(e.target.value)} placeholder={t("dashboard.timelineFilterWord")} />
           <input value={filters.tags} onChange={(e) => setFilters((prev) => ({ ...prev, tags: e.target.value }))} placeholder={t("dashboard.timelineFilterTags")} />
           <input type="date" value={filters.from} onChange={(e) => setFilters((prev) => ({ ...prev, from: e.target.value }))} title={t("dashboard.timelineFilterFrom")} />
@@ -922,7 +922,7 @@ export default function TimelineWidget({
           </label>
           <button
             type="button"
-            className="llm-hub-db-timeline-iconbtn"
+            className="dashboard-hub-db-timeline-iconbtn"
             onClick={() => {
               setWordInput("");
               setFilters({ word: "", tags: "", from: "", to: "", pinnedOnly: false });
@@ -934,17 +934,17 @@ export default function TimelineWidget({
         </div>
       )}
 
-      <div ref={listRef} className="llm-hub-db-timeline-list">
+      <div ref={listRef} className="dashboard-hub-db-timeline-list">
         {hasOlderPosts && (
-          <button type="button" className="llm-hub-db-timeline-load" disabled={loadingOlder} onClick={() => void loadOlder()}>
+          <button type="button" className="dashboard-hub-db-timeline-load" disabled={loadingOlder} onClick={() => void loadOlder()}>
             {loadingOlder ? <Loader2 size={13} className="is-spinning" /> : <ChevronUp size={13} />}
             {t("dashboard.timelineLoadOlder")}
           </button>
         )}
         {loading && posts.length === 0 ? (
-          <div className="llm-hub-db-widget-empty">{t("dashboard.loading")}</div>
+          <div className="dashboard-hub-db-widget-empty">{t("dashboard.loading")}</div>
         ) : posts.length === 0 ? (
-          <div className="llm-hub-db-widget-empty">{t("dashboard.timelineEmpty")}</div>
+          <div className="dashboard-hub-db-widget-empty">{t("dashboard.timelineEmpty")}</div>
         ) : (
           posts.map((post) => {
             const editing = editingPostId === post.id;
@@ -954,24 +954,24 @@ export default function TimelineWidget({
             const embedTargets = extractEmbedTargets(post.content);
             const body = stripPostTags(collapsed ? collapsedContent(post.content, collapseLineLimit, collapseCharLimit) : post.content);
             return (
-              <article key={`${post.sourcePath}:${post.id}`} className={`llm-hub-db-timeline-post-card${post.pinned ? " is-pinned" : ""}`}>
-                <div className="llm-hub-db-timeline-post-meta">
+              <article key={`${post.sourcePath}:${post.id}`} className={`dashboard-hub-db-timeline-post-card${post.pinned ? " is-pinned" : ""}`}>
+                <div className="dashboard-hub-db-timeline-post-meta">
                   <span>{new Date(post.createdAt).toLocaleString()}</span>
                   {post.pinned && <Pin size={12} />}
-                  <button type="button" className="llm-hub-db-timeline-iconbtn" onClick={() => void togglePin(post)} title={post.pinned ? t("dashboard.timelineUnpin") : t("dashboard.timelinePin")}>
+                  <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => void togglePin(post)} title={post.pinned ? t("dashboard.timelineUnpin") : t("dashboard.timelinePin")}>
                     <Pin size={13} />
                   </button>
-                  <button type="button" className="llm-hub-db-timeline-iconbtn" onClick={() => startEditing(post)} title={t("dashboard.editWidget")}>
+                  <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => startEditing(post)} title={t("dashboard.editWidget")}>
                     <PenLine size={13} />
                   </button>
-                  <button type="button" className="llm-hub-db-timeline-iconbtn is-danger" onClick={() => void deletePost(post)} title={t("dashboard.deleteWidget")}>
+                  <button type="button" className="dashboard-hub-db-timeline-iconbtn is-danger" onClick={() => void deletePost(post)} title={t("dashboard.deleteWidget")}>
                     <Trash2 size={13} />
                   </button>
                 </div>
                 {editing ? (
                   <div
                     ref={editContainerRef}
-                    className={`llm-hub-db-timeline-edit${editKeyboardFocused ? " is-keyboard-focused" : ""}`}
+                    className={`dashboard-hub-db-timeline-edit${editKeyboardFocused ? " is-keyboard-focused" : ""}`}
                     onFocusCapture={() => {
                       window.clearTimeout(editBlurTimerRef.current);
                       setEditKeyboardFocused(true);
@@ -984,7 +984,7 @@ export default function TimelineWidget({
                       }, 250);
                     }}
                   >
-                    <div className="llm-hub-db-timeline-textarea-wrap is-editor">
+                    <div className="dashboard-hub-db-timeline-textarea-wrap is-editor">
                       <textarea
                         ref={editTextareaRef}
                         value={editDraft}
@@ -1000,19 +1000,19 @@ export default function TimelineWidget({
                       {renderWikiSuggestions("edit")}
                     </div>
                     {renderImages(editImages, true)}
-                    <div className="llm-hub-db-timeline-composer-actions">
+                    <div className="dashboard-hub-db-timeline-composer-actions">
                       <input ref={editInputRef} type="file" accept="image/*" multiple onChange={(e) => addImages(e.target.files, true)} />
-                      <button type="button" className="llm-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={cancelEditing} title={t("dashboard.cancel")}>
+                      <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={cancelEditing} title={t("dashboard.cancel")}>
                         <X size={14} />
                       </button>
-                      <div className="llm-hub-db-timeline-composer-primary-actions">
-                        {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="llm-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => openAiRewrite("edit")} title={t("dashboard.timelineAiEdit")}>
+                      <div className="dashboard-hub-db-timeline-composer-primary-actions">
+                        {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => openAiRewrite("edit")} title={t("dashboard.timelineAiEdit")}>
                           <Sparkles size={14} />
                         </button>}
-                        <button type="button" className="llm-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => editInputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
+                        <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => editInputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
                           <Image size={14} />
                         </button>
-                        <button type="button" className="llm-hub-db-timeline-post" {...keepFocusProps} disabled={savingPostId === post.id || (!editDraft.trim() && editImages.length === 0)} onClick={() => void saveEdit(post)}>
+                        <button type="button" className="dashboard-hub-db-timeline-post" {...keepFocusProps} disabled={savingPostId === post.id || (!editDraft.trim() && editImages.length === 0)} onClick={() => void saveEdit(post)}>
                           {savingPostId === post.id ? <Loader2 size={13} className="is-spinning" /> : <Send size={13} />}
                           {t("dashboard.save")}
                         </button>
@@ -1025,13 +1025,13 @@ export default function TimelineWidget({
                       app={ctx.app}
                       markdown={body}
                       sourcePath={post.sourcePath}
-                      className={`llm-hub-db-timeline-body${collapsed ? " is-collapsed" : ""}`}
+                      className={`dashboard-hub-db-timeline-body${collapsed ? " is-collapsed" : ""}`}
                       onInternalLinkClick={(target) => {
                         new TimelineLinkPreviewModal(ctx.app, target, post.sourcePath).open();
                       }}
                     />
                     {tags.length > 0 && (
-                      <div className="llm-hub-db-timeline-tags">
+                      <div className="dashboard-hub-db-timeline-tags">
                         {tags.map((tag) => (
                           <button type="button" key={tag} onClick={() => searchTag(tag)}>
                             #{tag}
@@ -1040,11 +1040,11 @@ export default function TimelineWidget({
                       </div>
                     )}
                     {(canCollapse || embedTargets.length > 0) && (
-                      <div className="llm-hub-db-timeline-post-actions">
+                      <div className="dashboard-hub-db-timeline-post-actions">
                         {canCollapse && (
                           <button
                             type="button"
-                            className="llm-hub-db-timeline-more"
+                            className="dashboard-hub-db-timeline-more"
                             onClick={() => setExpandedPosts((prev) => {
                               const next = new Set(prev);
                               if (next.has(post.id)) next.delete(post.id);
@@ -1059,7 +1059,7 @@ export default function TimelineWidget({
                         {embedTargets.map((target) => (
                           <button
                             type="button"
-                            className="llm-hub-db-timeline-embed-link"
+                            className="dashboard-hub-db-timeline-embed-link"
                             key={target}
                             title={target}
                             onClick={() => {
@@ -1081,8 +1081,8 @@ export default function TimelineWidget({
       </div>
 
       {composerOpen && (
-        <div className="llm-hub-db-timeline-composer">
-          <div className="llm-hub-db-timeline-textarea-wrap is-composer">
+        <div className="dashboard-hub-db-timeline-composer">
+          <div className="dashboard-hub-db-timeline-textarea-wrap is-composer">
             <textarea
               ref={textareaRef}
               value={draft}
@@ -1099,19 +1099,19 @@ export default function TimelineWidget({
             {renderWikiSuggestions("draft")}
           </div>
           {renderImages(images)}
-          <div className="llm-hub-db-timeline-composer-actions">
+          <div className="dashboard-hub-db-timeline-composer-actions">
             <input ref={inputRef} type="file" accept="image/*" multiple onChange={(e) => addImages(e.target.files)} />
-            <button type="button" className="llm-hub-db-timeline-iconbtn" onClick={closeComposer} title={t("dashboard.cancel")}>
+            <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={closeComposer} title={t("dashboard.cancel")}>
               <X size={14} />
             </button>
-            <div className="llm-hub-db-timeline-composer-primary-actions">
-              {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="llm-hub-db-timeline-iconbtn" onClick={() => openAiRewrite("draft")} title={t("dashboard.timelineAiEdit")}>
+            <div className="dashboard-hub-db-timeline-composer-primary-actions">
+              {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => openAiRewrite("draft")} title={t("dashboard.timelineAiEdit")}>
                 <Sparkles size={14} />
               </button>}
-              <button type="button" className="llm-hub-db-timeline-iconbtn" onClick={() => inputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
+              <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => inputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
                 <Image size={14} />
               </button>
-              <button type="button" className="llm-hub-db-timeline-post" disabled={posting || (!draft.trim() && images.length === 0)} onClick={() => void submitPost()}>
+              <button type="button" className="dashboard-hub-db-timeline-post" disabled={posting || (!draft.trim() && images.length === 0)} onClick={() => void submitPost()}>
                 {posting ? <Loader2 size={13} className="is-spinning" /> : <Send size={13} />}
                 {t("dashboard.timelinePost")}
               </button>
@@ -1120,8 +1120,8 @@ export default function TimelineWidget({
         </div>
       )}
 
-      <div className="llm-hub-db-timeline-footer">
-        <button type="button" className="llm-hub-db-timeline-new" onClick={() => setComposerOpen(true)} disabled={composerOpen}>
+      <div className="dashboard-hub-db-timeline-footer">
+        <button type="button" className="dashboard-hub-db-timeline-new" onClick={() => setComposerOpen(true)} disabled={composerOpen}>
           <Plus size={13} />
           {t("dashboard.timelineNew")}
         </button>

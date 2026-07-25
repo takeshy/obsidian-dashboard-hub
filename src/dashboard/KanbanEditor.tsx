@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Columns3, Settings, X } from "lucide-react";
 import { t } from "src/i18n";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 import { parseKanbanFile, serializeKanbanFile, type KanbanBoardDefinition } from "./kanbanFile";
 import type { WidgetContext } from "./types";
 import KanbanWidget from "./widgets/KanbanWidget";
 import { KanbanConfigEditor } from "./widgets/config-editors/KanbanConfigEditor";
 
 interface KanbanEditorProps {
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   sourcePath: string;
   fileName: string;
   yamlContent: string;
@@ -40,16 +40,16 @@ export function KanbanEditor({ plugin, sourcePath, fileName, yamlContent, onYaml
   }), [plugin, sourcePath, updateDefinition]);
 
   return (
-    <div className="llm-hub-kanban-view">
-      <div className="llm-hub-db-toolbar">
-        <div className="llm-hub-db-toolbar-left">
+    <div className="dashboard-hub-kanban-view">
+      <div className="dashboard-hub-db-toolbar">
+        <div className="dashboard-hub-db-toolbar-left">
           <Columns3 size={16} />
-          <span className="llm-hub-db-title">{fileName}</span>
+          <span className="dashboard-hub-db-title">{fileName}</span>
         </div>
-        <div className="llm-hub-db-toolbar-right">
+        <div className="dashboard-hub-db-toolbar-right">
           <button
             type="button"
-            className="llm-hub-db-toolbtn"
+            className="dashboard-hub-db-toolbtn"
             onClick={() => setShowSettings(true)}
             title={t("dashboard.settings")}
           >
@@ -59,31 +59,31 @@ export function KanbanEditor({ plugin, sourcePath, fileName, yamlContent, onYaml
         </div>
       </div>
 
-      <div className="llm-hub-kanban-view-body">
+      <div className="dashboard-hub-kanban-view-body">
         {definition
           ? <KanbanWidget config={definition} ctx={ctx} />
-          : <div className="llm-hub-db-widget-empty">{t("dashboard.kanbanFileError")}</div>}
+          : <div className="dashboard-hub-db-widget-empty">{t("dashboard.kanbanFileError")}</div>}
       </div>
 
       {showSettings && definition && (
-        <div className="llm-hub-db-panel-overlay" onClick={() => setShowSettings(false)}>
-          <div className="llm-hub-db-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="llm-hub-db-modal-header">
-              <div className="llm-hub-db-panel-title">
+        <div className="dashboard-hub-db-panel-overlay" onClick={() => setShowSettings(false)}>
+          <div className="dashboard-hub-db-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="dashboard-hub-db-modal-header">
+              <div className="dashboard-hub-db-panel-title">
                 <Columns3 size={18} />
                 <h3>{t("dashboard.settings")}</h3>
               </div>
               <button
                 type="button"
-                className="llm-hub-db-iconbtn"
+                className="dashboard-hub-db-iconbtn"
                 onClick={() => setShowSettings(false)}
                 title={t("dashboard.done")}
               >
                 <X size={18} />
               </button>
             </div>
-            <div className="llm-hub-db-panel-body">
-              <p className="llm-hub-db-hint">{t("dashboard.settingsAutoSaved")}</p>
+            <div className="dashboard-hub-db-panel-body">
+              <p className="dashboard-hub-db-hint">{t("dashboard.settingsAutoSaved")}</p>
               <KanbanConfigEditor
                 config={definition}
                 onChange={updateDefinition}
@@ -94,8 +94,8 @@ export function KanbanEditor({ plugin, sourcePath, fileName, yamlContent, onYaml
                 hideFilePicker
               />
             </div>
-            <div className="llm-hub-db-panel-footer is-end">
-              <button className="llm-hub-db-primary-btn" onClick={() => setShowSettings(false)}>
+            <div className="dashboard-hub-db-panel-footer is-end">
+              <button className="dashboard-hub-db-primary-btn" onClick={() => setShowSettings(false)}>
                 {t("dashboard.done")}
               </button>
             </div>

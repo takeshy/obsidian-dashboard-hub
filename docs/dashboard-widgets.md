@@ -40,7 +40,7 @@ For document reading, selected text has context actions:
 - Ask AI - prefill Chat with the selected text.
 - Add to memo - attach the selected quote to a reading memo.
 
-Memos are stored under `<Base directory>/Memos/` using the source file path. Quote anchors include context when possible so memo links can jump back to repeated text more reliably. While the memo panel is open, saved memo ranges are highlighted. Empty memo text is allowed when a quote link is attached. The memo panel's open and collapsed state is saved in the widget config (`memoPanelOpen`, `memoPanelCollapsed`), so it persists with the dashboard.
+Memos are stored under `<Base directory>/Memos/` using the source file path. Their create, update, and delete activity is written to the plugin's configured activity Timeline. Quote anchors include context when possible so memo links can jump back to repeated text more reliably. While the memo panel is open, saved memo ranges are highlighted. Empty memo text is allowed when a quote link is attached. The memo panel's open and collapsed state is saved in the widget config (`memoPanelOpen`, `memoPanelCollapsed`), so it persists with the dashboard.
 
 # Web Embed Widget
 
@@ -67,7 +67,7 @@ Settings:
 - Columns - ordered list of status values and labels.
 - Display fields - ordered frontmatter fields shown below the title, such as `priority` or `due`.
 - Show unmatched cards column - shows an "Unspecified" column for notes whose status matches no configured column.
-- Linked Timeline - optional existing Timeline selected with a searchable picker. When set, every move to a different column appends a `Kanban · <board name>` info callout with the task link and old/new status labels in its body. Clearing the picker disables Timeline integration.
+- Activity logging - every move to a different column appends a `Kanban · <board name>` info callout with the task link and old/new status labels to the plugin's configured activity Timeline.
 
 The New button creates a note matching the board filters: folder, tag, selected column status, and (when configured) the title property are written into the new note.
 
@@ -79,11 +79,18 @@ The Secret Manager widget lists `.encrypted` vault files and lets the user creat
 
 Settings and behavior:
 
-- Folder - optional root folder for `.encrypted` files; default is `Secrets`.
+- Folder - root folder for `.encrypted` files; blank values use `Secrets`. Only this subtree is scanned and vault events update the affected entry instead of re-reading every secret.
 - Search - matches secret name, description, and public metadata without decrypting values.
 - Detail modal - shows modified time instead of the vault path, includes an open-file action, and can unlock/copy/edit the secret.
 - Public metadata - stored outside the ciphertext for search/listing and edited as `key: value` pairs; do not put sensitive values there.
 - Secret value - decrypted only in memory while unlocked and saved back encrypted.
+
+Secret values use AES-GCM with a random per-write key. RSA-OAEP wraps that key
+so values can be written with the public key while the password-protected
+private key remains locked; the password is needed only for reading. New files
+declare crypto format version 1 and PBKDF2-SHA256 with 600,000 iterations.
+Legacy files without version fields continue to use their original 100,000-round
+derivation when opened.
 
 # Timeline Widget
 
@@ -106,7 +113,9 @@ Clicking a date opens a modal instead of expanding the widget. The modal shows e
 
 ![Calendar day details](../../../images/calendar_date.png)
 
-Events are stored in the selected Timeline's per-day Markdown file as normal Timeline posts with a `calendar-event` marker and an Obsidian calendar callout. Changing the event date in the modal moves the post to the corresponding day file. An event appears on its scheduled date, while its registration also appears as Timeline activity on the date it was written.
+Events are stored in the selected Timeline's per-day Markdown file as normal Timeline posts with a `calendar-event` marker and an Obsidian calendar callout. Changing the event date in the modal moves the post to the corresponding day file and records the reschedule in the configured activity Timeline.
+
+Daily Timeline queries read only the requested day's file. A future event therefore appears on its scheduled day, and its block timestamp shows when it was registered; registration is not duplicated in the earlier day's activity.
 
 Settings:
 

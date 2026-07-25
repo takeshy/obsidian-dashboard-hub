@@ -1,5 +1,5 @@
 export interface SecretManagerConfig {
-  /** Empty means every .encrypted file in the vault. */
+  /** Folder containing the .encrypted files. */
   folder?: string;
 }
 

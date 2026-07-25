@@ -1,34 +1,25 @@
 import { Globe, ExternalLink } from "lucide-react";
 import { t } from "src/i18n";
 import type { ConfigEditorProps } from "../../types";
+import { safeWebUrl } from "../webUrl";
 
 interface WebConfig {
   url?: string;
   showHeader?: boolean;
 }
 
-const isValidUrl = (value: string): boolean => {
-  if (!value) return true;
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch {
-    return false;
-  }
-};
-
 export function WebConfigEditor({ config, onChange }: ConfigEditorProps) {
   const cfg = (config ?? {}) as WebConfig;
   const url = cfg.url ?? "";
-  const valid = isValidUrl(url);
+  const valid = !url || safeWebUrl(url) !== null;
   const showPreview = !!url && valid;
 
   return (
-    <div className="llm-hub-db-fields">
-      <div className="llm-hub-db-field">
+    <div className="dashboard-hub-db-fields">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.url")}</label>
-        <div className="llm-hub-db-input-icon">
-          <Globe size={14} className="llm-hub-db-input-leadicon" />
+        <div className="dashboard-hub-db-input-icon">
+          <Globe size={14} className="dashboard-hub-db-input-leadicon" />
           <input
             type="url"
             value={url}
@@ -36,12 +27,12 @@ export function WebConfigEditor({ config, onChange }: ConfigEditorProps) {
             placeholder="https://example.com"
           />
         </div>
-        {!valid && <p className="llm-hub-db-error">{t("dashboard.urlInvalid")}</p>}
-      <p className="llm-hub-db-hint">{t("dashboard.webHint")}</p>
+        {!valid && <p className="dashboard-hub-db-error">{t("dashboard.urlInvalid")}</p>}
+      <p className="dashboard-hub-db-hint">{t("dashboard.webHint")}</p>
     </div>
 
-    <div className="llm-hub-db-field">
-      <label className="llm-hub-db-kanban-checkbox">
+    <div className="dashboard-hub-db-field">
+      <label className="dashboard-hub-db-kanban-checkbox">
         <input
           type="checkbox"
           checked={cfg.showHeader !== false}
@@ -53,7 +44,7 @@ export function WebConfigEditor({ config, onChange }: ConfigEditorProps) {
 
     {showPreview && (
         <a
-          className="llm-hub-db-web-open"
+          className="dashboard-hub-db-web-open"
           href={url}
           target="_blank"
           rel="noopener noreferrer"

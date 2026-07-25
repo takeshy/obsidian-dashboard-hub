@@ -3,13 +3,13 @@ import { X, Trash2 } from "lucide-react";
 import type { App } from "obsidian";
 import { getWidgetDef } from "./widgets/registry";
 import type { Widget } from "./types";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 import { t } from "src/i18n";
 
 interface WidgetSettingsPanelProps {
   widget: Widget;
   app: App;
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   sourcePath: string;
   onChange: (config: unknown) => void;
   onClose: () => void;
@@ -35,22 +35,22 @@ export function WidgetSettingsPanel({
   const ConfigEditor = def.ConfigEditor;
 
   const panel = (
-    <div className="llm-hub-db-panel-overlay" onClick={onClose}>
-      <div className="llm-hub-db-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="llm-hub-db-modal-header">
-          <div className="llm-hub-db-panel-title">
-            <span className="llm-hub-db-palette-icon">{def.icon}</span>
+    <div className="dashboard-hub-db-panel-overlay" onClick={onClose}>
+      <div className="dashboard-hub-db-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="dashboard-hub-db-modal-header">
+          <div className="dashboard-hub-db-panel-title">
+            <span className="dashboard-hub-db-palette-icon">{def.icon}</span>
             <h3>{def.label}</h3>
           </div>
-          <button className="llm-hub-db-iconbtn" onClick={onClose} title={t("dashboard.done")}>
+          <button className="dashboard-hub-db-iconbtn" onClick={onClose} title={t("dashboard.done")}>
             <X size={18} />
           </button>
         </div>
 
-        <div className="llm-hub-db-panel-body">
+        <div className="dashboard-hub-db-panel-body">
           {ConfigEditor ? (
             <>
-              <p className="llm-hub-db-hint">{t("dashboard.settingsAutoSaved")}</p>
+              <p className="dashboard-hub-db-hint">{t("dashboard.settingsAutoSaved")}</p>
               <ConfigEditor
                 key={widget.id}
                 config={widget.config}
@@ -62,16 +62,16 @@ export function WidgetSettingsPanel({
               />
             </>
           ) : (
-            <p className="llm-hub-db-empty-hint">{t("dashboard.noSettings")}</p>
+            <p className="dashboard-hub-db-empty-hint">{t("dashboard.noSettings")}</p>
           )}
         </div>
 
-        <div className="llm-hub-db-panel-footer">
-          <button className="llm-hub-db-danger-link" onClick={onDelete}>
+        <div className="dashboard-hub-db-panel-footer">
+          <button className="dashboard-hub-db-danger-link" onClick={onDelete}>
             <Trash2 size={14} />
             {t("dashboard.deleteWidget")}
           </button>
-          <button className="llm-hub-db-primary-btn" onClick={onDone}>
+          <button className="dashboard-hub-db-primary-btn" onClick={onDone}>
             {t("dashboard.done")}
           </button>
         </div>

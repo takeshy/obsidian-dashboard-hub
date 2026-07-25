@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { ChevronDown } from "lucide-react";
 import { Menu, type TFile } from "obsidian";
 import { t } from "src/i18n";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
+import { filesInVaultFolder } from "src/utils/vaultFiles";
 import { DashboardCanvas } from "./DashboardCanvas";
 import {
   parseDashboard,
@@ -13,7 +14,7 @@ import {
 import type { DashboardData } from "./types";
 
 interface DashboardEditorProps {
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   sourcePath: string;
   fileName: string;
   yamlContent: string;
@@ -45,7 +46,7 @@ export function DashboardEditor({
     [yamlContent],
   );
   const [data, setData] = useState<DashboardData>(initial);
-  const [, setBaseDirectoryRevision] = useState(0);
+  const [baseDirectoryRevision, setBaseDirectoryRevision] = useState(0);
 
   useEffect(() => {
     const workspace = plugin.app.workspace as unknown as {
@@ -59,10 +60,10 @@ export function DashboardEditor({
   }, [plugin.app.workspace]);
 
   const dashboards = useMemo(
-    () => plugin.app.vault.getFiles()
+    () => filesInVaultFolder(plugin.app.vault, plugin.settings.baseDirectory)
       .filter((file) => file.extension === "dashboard")
       .sort((a, b) => a.path.localeCompare(b.path)),
-    [plugin.app],
+    [plugin.app.vault, plugin.settings.baseDirectory, baseDirectoryRevision],
   );
 
   const duplicateDashboardBasenames = useMemo(() => {
@@ -133,11 +134,11 @@ export function DashboardEditor({
       toolbarLeft={(
         <button
           type="button"
-          className="llm-hub-db-title-btn"
+          className="dashboard-hub-db-title-btn"
           onClick={showDashboardMenu}
           title={t("dashboard.switchDashboard")}
         >
-          <span className="llm-hub-db-title">{fileName}</span>
+          <span className="dashboard-hub-db-title">{fileName}</span>
           <ChevronDown size={14} />
         </button>
       )}

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } fro
 import { Plus, Undo2, Redo2, Columns3, Rows3 } from "lucide-react";
 import type { App } from "obsidian";
 import { t } from "src/i18n";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 import { generateId } from "src/utils/id";
 import { useBreakpoint } from "./useBreakpoint";
 import { useGridLayout } from "./useGridLayout";
@@ -17,7 +17,7 @@ interface DashboardCanvasProps {
   /** Called with the next data on every mutation (add/update/delete/move/resize). */
   onChange: (next: DashboardData) => void;
   app: App;
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   /** Path of the backing `.dashboard` file (link-resolution source path). */
   sourcePath: string;
   /** Left side of the toolbar (e.g. the dashboard file name). */
@@ -319,15 +319,15 @@ export function DashboardCanvas({
   );
 
   return (
-    <div className="llm-hub-db-root">
-      <div className="llm-hub-db-toolbar">
-        <div className="llm-hub-db-toolbar-left">{toolbarLeft}</div>
-        <div className="llm-hub-db-toolbar-right">
+    <div className="dashboard-hub-db-root">
+      <div className="dashboard-hub-db-toolbar">
+        <div className="dashboard-hub-db-toolbar-left">{toolbarLeft}</div>
+        <div className="dashboard-hub-db-toolbar-right">
           <button
             onClick={undo}
             disabled={!canUndo}
             title={t("dashboard.undo")}
-            className="llm-hub-db-toolbtn"
+            className="dashboard-hub-db-toolbtn"
           >
             <Undo2 size={14} />
           </button>
@@ -335,7 +335,7 @@ export function DashboardCanvas({
             onClick={redo}
             disabled={!canRedo}
             title={t("dashboard.redo")}
-            className="llm-hub-db-toolbtn"
+            className="dashboard-hub-db-toolbtn"
           >
             <Redo2 size={14} />
           </button>
@@ -343,7 +343,7 @@ export function DashboardCanvas({
             onClick={() => handleLayoutDirection("horizontal")}
             aria-pressed={activeLayoutDirection === "horizontal"}
             title={t(activeLayoutDirection === "horizontal" ? "dashboard.alignHorizontal" : "dashboard.useHorizontalLayout")}
-            className={`llm-hub-db-toolbtn${activeLayoutDirection === "horizontal" ? " is-active" : ""}`}
+            className={`dashboard-hub-db-toolbtn${activeLayoutDirection === "horizontal" ? " is-active" : ""}`}
           >
             <Columns3 size={14} />
           </button>
@@ -351,13 +351,13 @@ export function DashboardCanvas({
             onClick={() => handleLayoutDirection("vertical")}
             aria-pressed={activeLayoutDirection === "vertical"}
             title={t(activeLayoutDirection === "vertical" ? "dashboard.alignVertical" : "dashboard.useVerticalLayout")}
-            className={`llm-hub-db-toolbtn${activeLayoutDirection === "vertical" ? " is-active" : ""}`}
+            className={`dashboard-hub-db-toolbtn${activeLayoutDirection === "vertical" ? " is-active" : ""}`}
           >
             <Rows3 size={14} />
           </button>
           <button
             onClick={() => setShowPalette(true)}
-            className="llm-hub-db-toolbtn is-accent"
+            className="dashboard-hub-db-toolbtn is-accent"
           >
             <Plus size={14} />
             {t("dashboard.addWidget")}
@@ -368,19 +368,19 @@ export function DashboardCanvas({
       {/* The ref'd element must always be mounted so useBreakpoint can measure
           it — otherwise the breakpoint stays null and newly added widgets never
           render. */}
-      <div className="llm-hub-db-scroll">
+      <div className="dashboard-hub-db-scroll">
         <div
           ref={containerRef}
-          className={`llm-hub-db-grid${maximizedWidgetId ? " is-maximized" : ""}`}
+          className={`dashboard-hub-db-grid${maximizedWidgetId ? " is-maximized" : ""}`}
           style={data.widgets.length > 0 && !maximizedWidgetId ? gridStyle : undefined}
         >
           {data.widgets.length === 0 ? (
-            <div className="llm-hub-db-empty">
-              <Plus size={48} className="llm-hub-db-empty-icon" />
+            <div className="dashboard-hub-db-empty">
+              <Plus size={48} className="dashboard-hub-db-empty-icon" />
               <p>{t("dashboard.emptyDashboard")}</p>
               <button
                 onClick={() => setShowPalette(true)}
-                className="llm-hub-db-primary-btn"
+                className="dashboard-hub-db-primary-btn"
               >
                 <Plus size={16} />
                 {t("dashboard.addFirstWidget")}

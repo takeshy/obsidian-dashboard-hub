@@ -10,10 +10,12 @@ import { parseFileViewPosition, restoredScrollTop, type FileViewPosition } from 
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 import { generateId } from "src/utils/id";
 import PdfFileViewer, { type PdfFileViewerHandle } from "./PdfFileViewer";
+import { htmlFrameSandbox } from "./htmlFrameSandbox";
 
 export interface FileConfig {
   path?: string;
   showHeader?: boolean;
+  allowScripts?: boolean;
   memoPanelOpen?: boolean;
   memoPanelCollapsed?: boolean;
 }
@@ -312,7 +314,7 @@ function setCustomHighlights(win: Window, name: string, ranges: Range[]) {
 }
 
 function ensureHighlightStyle(doc: Document, name: string) {
-  const id = `llm-hub-db-memo-highlight-${name}`;
+  const id = `dashboard-hub-db-memo-highlight-${name}`;
   if (doc.getElementById(id)) return;
   // EPUB/HTML documents live in an iframe realm where Obsidian's HTMLElement
   // prototype helpers (such as createEl) are not installed. Use the standard
@@ -358,11 +360,11 @@ function EditableText({
   useEffect(() => setText(value), [value]);
 
   return (
-    <div className="llm-hub-db-file-editor">
-      <div className="llm-hub-db-file-editorbar">
+    <div className="dashboard-hub-db-file-editor">
+      <div className="dashboard-hub-db-file-editorbar">
         <button
           type="button"
-          className="llm-hub-db-iconbtn"
+          className="dashboard-hub-db-iconbtn"
           disabled={!dirty || saving}
           title={t("common.save")}
           onClick={() => {
@@ -374,7 +376,7 @@ function EditableText({
         </button>
       </div>
       <textarea
-        className={className ?? "llm-hub-db-file-textarea"}
+        className={className ?? "dashboard-hub-db-file-textarea"}
         value={text}
         onChange={(e) => setText(e.target.value)}
         spellCheck={false}
@@ -386,6 +388,7 @@ function EditableText({
 function HtmlFrame({
   html,
   title,
+  allowScripts = false,
   onSelectionContextMenu,
   onSelectionClear,
   frameRef,
@@ -397,6 +400,7 @@ function HtmlFrame({
 }: {
   html: string;
   title: string;
+  allowScripts?: boolean;
   onSelectionContextMenu?: (text: string, x: number, y: number, anchor?: QuoteAnchorData) => void;
   onSelectionClear?: () => void;
   frameRef: React.RefObject<HTMLIFrameElement>;
@@ -488,10 +492,10 @@ function HtmlFrame({
         event.clientX + (frameRect?.left ?? 0),
         event.clientY + (frameRect?.top ?? 0),
       ) ?? false;
-      doc.body.classList.toggle("llm-hub-db-memo-hit", hit);
+      doc.body.classList.toggle("dashboard-hub-db-memo-hit", hit);
     };
     const onPointerOut = () => {
-      doc.body.classList.remove("llm-hub-db-memo-hit");
+      doc.body.classList.remove("dashboard-hub-db-memo-hit");
       onMemoPointerLeave?.();
     };
     doc.addEventListener("pointermove", onPointerMove);
@@ -535,11 +539,12 @@ function HtmlFrame({
 
   return (
     <iframe
+      key={allowScripts ? "scripts-enabled" : "scripts-disabled"}
       ref={frameRef}
-      className="llm-hub-db-file-frame"
+      className="dashboard-hub-db-file-frame"
       title={title}
       srcDoc={html}
-      sandbox="allow-same-origin allow-popups"
+      sandbox={htmlFrameSandbox(allowScripts)}
       onLoad={() => {
         setLoadTick((value) => value + 1);
         onLoad?.();
@@ -569,12 +574,12 @@ function SelectionMenu({
 }) {
   const inner = (
     <div
-      className="llm-hub-db-selection-menu"
+      className="dashboard-hub-db-selection-menu"
       style={{ left: x, top: y }}
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="llm-hub-db-selection-menu-quote">{quote}</div>
+      <div className="dashboard-hub-db-selection-menu-quote">{quote}</div>
       <button type="button" onClick={onCopy}>
         <Copy size={13} />
         {t("message.copy")}
@@ -592,9 +597,9 @@ function SelectionMenu({
   // Mobile: no backdrop, so the user can keep adjusting the native selection
   // handles while the menu is visible; it closes when the selection clears.
   const menu = Platform.isMobile ? (
-    <div className="llm-hub-db-selection-menu-floating">{inner}</div>
+    <div className="dashboard-hub-db-selection-menu-floating">{inner}</div>
   ) : (
-    <div className="llm-hub-db-selection-menu-backdrop" onMouseDown={onClose}>
+    <div className="dashboard-hub-db-selection-menu-backdrop" onMouseDown={onClose}>
       {inner}
     </div>
   );
@@ -652,7 +657,7 @@ function MemoPanel({
     try {
       await appendTimelineEntry(
         ctx.app.vault,
-        "Timeline",
+        ctx.plugin.settings.activityTimelineName,
         `> [!note] Memo ${action}\n> [[${sourcePath}]]${content ? `\n\n${content}` : ""}`,
         new Date(),
         ctx.plugin.settings.baseDirectory,
@@ -692,7 +697,7 @@ function MemoPanel({
       const inset = viewport
         ? Math.max(0, win.innerHeight - viewport.height - viewport.offsetTop)
         : 0;
-      el.style.setProperty("--llm-hub-db-memo-keyboard-inset", `${inset}px`);
+      el.style.setProperty("--dashboard-hub-db-memo-keyboard-inset", `${inset}px`);
     };
 
     updateKeyboardInset();
@@ -703,7 +708,7 @@ function MemoPanel({
       viewport?.removeEventListener("resize", updateKeyboardInset);
       viewport?.removeEventListener("scroll", updateKeyboardInset);
       win.removeEventListener("resize", updateKeyboardInset);
-      el.style.removeProperty("--llm-hub-db-memo-keyboard-inset");
+      el.style.removeProperty("--dashboard-hub-db-memo-keyboard-inset");
     };
   }, [keyboardTarget]);
 
@@ -844,13 +849,13 @@ function MemoPanel({
   const compose = (
     <div
       ref={composeRef}
-      className={`llm-hub-db-memo-compose${keyboardTarget === "compose" ? " is-keyboard-focused" : ""}${Platform.isMobile ? composeOpen ? " is-mobile-modal" : " is-mobile-hidden" : ""}`}
+      className={`dashboard-hub-db-memo-compose${keyboardTarget === "compose" ? " is-keyboard-focused" : ""}${Platform.isMobile ? composeOpen ? " is-mobile-modal" : " is-mobile-hidden" : ""}`}
       {...keyboardFocusProps("compose")}
     >
       {selectedQuote && (
-        <div className="llm-hub-db-memo-relation">
+        <div className="dashboard-hub-db-memo-relation">
           <blockquote>{selectedQuote}</blockquote>
-          <button type="button" className="llm-hub-db-iconbtn" {...keepFocusProps} onClick={onClearSelectedQuote} title={t("common.delete")}>
+          <button type="button" className="dashboard-hub-db-iconbtn" {...keepFocusProps} onClick={onClearSelectedQuote} title={t("common.delete")}>
             <X size={12} />
           </button>
         </div>
@@ -864,47 +869,47 @@ function MemoPanel({
         }}
         placeholder={t("memo.addPlaceholder")}
       />
-      <button type="button" className="llm-hub-db-primary-btn" {...keepFocusProps} onClick={() => void addMemo()}>
+      <button type="button" className="dashboard-hub-db-primary-btn" {...keepFocusProps} onClick={() => void addMemo()}>
         {t("memo.add")}
       </button>
     </div>
   );
 
   return (
-    <aside className="llm-hub-db-memo-panel">
-      <div className="llm-hub-db-memo-header">
+    <aside className="dashboard-hub-db-memo-panel">
+      <div className="dashboard-hub-db-memo-header">
         <span>{t("memo.panelTitle")}</span>
-        <span className="llm-hub-db-memo-header-actions">
-          {ctx.plugin.hasCapability("chat") && <button type="button" className="llm-hub-db-iconbtn" onClick={askAiAboutMemoFile} title={t("memo.askMemoAi")}>
+        <span className="dashboard-hub-db-memo-header-actions">
+          {ctx.plugin.hasCapability("chat") && <button type="button" className="dashboard-hub-db-iconbtn" onClick={askAiAboutMemoFile} title={t("memo.askMemoAi")}>
             <Bot size={13} />
           </button>}
-          <button type="button" className="llm-hub-db-iconbtn" onClick={onCollapse} title={t("memo.collapse")}>
+          <button type="button" className="dashboard-hub-db-iconbtn" onClick={onCollapse} title={t("memo.collapse")}>
             <ChevronsLeft size={13} />
           </button>
-          <button type="button" className="llm-hub-db-iconbtn" onClick={onClose} title={t("common.close")}>
+          <button type="button" className="dashboard-hub-db-iconbtn" onClick={onClose} title={t("common.close")}>
             <X size={13} />
           </button>
         </span>
       </div>
-      <div ref={listRef} className="llm-hub-db-memo-list">
+      <div ref={listRef} className="dashboard-hub-db-memo-list">
         {memos === null ? (
-          <div className="llm-hub-db-widget-empty"><Loader2 size={16} /></div>
+          <div className="dashboard-hub-db-widget-empty"><Loader2 size={16} /></div>
         ) : memos.length === 0 ? (
-          <div className="llm-hub-db-memo-empty">{t("memo.empty")}</div>
+          <div className="dashboard-hub-db-memo-empty">{t("memo.empty")}</div>
         ) : (
           memos.map((memo) => (
             <div
-              className={`llm-hub-db-memo-item${focusMemoId === memo.id ? " is-focused" : ""}`}
+              className={`dashboard-hub-db-memo-item${focusMemoId === memo.id ? " is-focused" : ""}`}
               data-memo-id={memo.id}
               key={memo.id}
             >
-              <div className="llm-hub-db-memo-item-head">
+              <div className="dashboard-hub-db-memo-item-head">
                 <time>{new Date(memo.createdAt).toLocaleString()}</time>
                 {editingId !== memo.id && (
-                  <span className="llm-hub-db-memo-item-actions">
+                  <span className="dashboard-hub-db-memo-item-actions">
                     {ctx.plugin.hasCapability("chat") && <button
                       type="button"
-                      className="llm-hub-db-iconbtn"
+                      className="dashboard-hub-db-iconbtn"
                       onClick={() => askAiAboutMemo(memo)}
                       title={t("memo.askAi")}
                     >
@@ -912,7 +917,7 @@ function MemoPanel({
                     </button>}
                     <button
                       type="button"
-                      className="llm-hub-db-iconbtn"
+                      className="dashboard-hub-db-iconbtn"
                       onClick={() => startEdit(memo)}
                       title={t("dashboard.edit")}
                     >
@@ -920,7 +925,7 @@ function MemoPanel({
                     </button>
                     <button
                       type="button"
-                      className="llm-hub-db-iconbtn is-danger"
+                      className="dashboard-hub-db-iconbtn is-danger"
                       onClick={() => void deleteMemo(memo.id)}
                       title={t("common.delete")}
                     >
@@ -932,11 +937,11 @@ function MemoPanel({
               {editingId === memo.id ? (
                 <div
                   ref={editRef}
-                  className={`llm-hub-db-memo-edit${keyboardTarget === "edit" ? " is-keyboard-focused" : ""}`}
+                  className={`dashboard-hub-db-memo-edit${keyboardTarget === "edit" ? " is-keyboard-focused" : ""}`}
                   {...keyboardFocusProps("edit")}
                 >
                   <textarea
-                    className="llm-hub-db-memo-edit-quote"
+                    className="dashboard-hub-db-memo-edit-quote"
                     value={editQuote}
                     onChange={(e) => setEditQuote(e.target.value)}
                     placeholder={t("memo.quotePlaceholder")}
@@ -946,11 +951,11 @@ function MemoPanel({
                     onChange={(e) => setEditText(e.target.value)}
                     placeholder={t("memo.addPlaceholder")}
                   />
-                  <div className="llm-hub-db-memo-edit-actions">
-                    <button type="button" className="llm-hub-db-toolbtn" {...keepFocusProps} onClick={cancelEdit}>
+                  <div className="dashboard-hub-db-memo-edit-actions">
+                    <button type="button" className="dashboard-hub-db-toolbtn" {...keepFocusProps} onClick={cancelEdit}>
                       {t("common.cancel")}
                     </button>
-                    <button type="button" className="llm-hub-db-primary-btn" {...keepFocusProps} onClick={() => void saveEdit()}>
+                    <button type="button" className="dashboard-hub-db-primary-btn" {...keepFocusProps} onClick={() => void saveEdit()}>
                       {t("common.save")}
                     </button>
                   </div>
@@ -960,7 +965,7 @@ function MemoPanel({
                   {memo.quote && (
                     <button
                       type="button"
-                      className="llm-hub-db-memo-quote-link"
+                      className="dashboard-hub-db-memo-quote-link"
                       onClick={() => onQuoteClick(memo.quote!, anchorDataFromMemo(memo))}
                       title={memo.quote}
                     >
@@ -976,15 +981,15 @@ function MemoPanel({
       </div>
       {Platform.isMobile ? (
         <>
-          <div className="llm-hub-db-memo-compose-launcher">
-            <button type="button" className="llm-hub-db-primary-btn" onClick={() => setComposeOpen(true)}>
+          <div className="dashboard-hub-db-memo-compose-launcher">
+            <button type="button" className="dashboard-hub-db-primary-btn" onClick={() => setComposeOpen(true)}>
               {t("memo.add")}
             </button>
           </div>
           {composeOpen && (
             <button
               type="button"
-              className="llm-hub-db-memo-compose-backdrop"
+              className="dashboard-hub-db-memo-compose-backdrop"
               aria-label={t("dashboard.cancel")}
               onClick={closeCompose}
             />
@@ -1026,7 +1031,7 @@ export default function FileWidget({
   const frameRef = useRef<HTMLIFrameElement>(null);
   const pdfViewerRef = useRef<PdfFileViewerHandle>(null);
   const memoRangesRef = useRef<MemoRange[]>([]);
-  const highlightNameRef = useRef(`llm-hub-db-memo-${Math.random().toString(36).slice(2)}`);
+  const highlightNameRef = useRef(`dashboard-hub-db-memo-${Math.random().toString(36).slice(2)}`);
   const viewPositionSaveTimerRef = useRef(0);
   const pendingViewPositionRef = useRef<FileViewPosition | null>(null);
   const app = ctx?.app;
@@ -1038,6 +1043,7 @@ export default function FileWidget({
   }, [app, path]);
 
   const kind = fileKind(path);
+  const htmlScriptsEnabled = kind === "html" && cfg.allowScripts === true;
   const viewPositionKey = `${path}:${kind}`;
   const viewPositionStorageKey = `dashboard-hub:file-view-position:${ctx?.widgetId ?? path}`;
   const isReadableText = kind === "markdown" || kind === "text" || kind === "html";
@@ -1064,7 +1070,7 @@ export default function FileWidget({
       ? pdfViewerRef.current?.getScrollContainer()
       : kind === "html" || kind === "epub"
       ? frameRef.current?.contentDocument?.scrollingElement as HTMLElement | null
-      : contentRef.current?.querySelector<HTMLElement>(".llm-hub-db-markdown") ?? null;
+      : contentRef.current?.querySelector<HTMLElement>(".dashboard-hub-db-markdown") ?? null;
     if (!target) return;
     const contentRoot: Element | null = kind === "html" || kind === "epub"
       ? frameRef.current?.contentDocument?.body ?? null
@@ -1317,7 +1323,9 @@ export default function FileWidget({
           setSelectionMenu((current) => {
             if (!current) return current;
             const hostSelected = (doc.getSelection()?.toString().trim() ?? "").length > 0;
-            const frameSelected = (frameRef.current?.contentWindow?.getSelection()?.toString().trim() ?? "").length > 0;
+            const frameSelected = htmlScriptsEnabled
+              ? false
+              : (frameRef.current?.contentWindow?.getSelection()?.toString().trim() ?? "").length > 0;
             return hostSelected || frameSelected ? current : null;
           });
           return;
@@ -1332,7 +1340,7 @@ export default function FileWidget({
       window.clearTimeout(timer);
       doc.removeEventListener("selectionchange", onSelectionChange);
     };
-  }, [openSelectionMenu, readHostSelection]);
+  }, [htmlScriptsEnabled, openSelectionMenu, readHostSelection]);
 
   const copySelection = useCallback(async () => {
     if (!selectionMenu) return;
@@ -1354,12 +1362,13 @@ export default function FileWidget({
 
   const rootsForQuotes = useCallback((): Array<{ root: Node; win: Window }> => {
     if (kind === "pdf") return pdfViewerRef.current?.getSelectionRoots() ?? [];
+    if (kind === "html" && htmlScriptsEnabled) return [];
     if ((kind === "html" || kind === "epub") && frameRef.current?.contentDocument?.body && frameRef.current.contentWindow) {
       return [{ root: frameRef.current.contentDocument.body, win: frameRef.current.contentWindow }];
     }
     if (contentRef.current) return [{ root: contentRef.current, win: window }];
     return [];
-  }, [kind]);
+  }, [htmlScriptsEnabled, kind]);
 
   const findQuoteRange = useCallback((quote: string, anchor?: QuoteAnchorData): { range: Range; win: Window } | null => {
     for (const candidate of rootsForQuotes()) {
@@ -1385,7 +1394,7 @@ export default function FileWidget({
     const clear = () => {
       setCustomHighlights(window, name, []);
       memoRangesRef.current = [];
-      const frameWin = frameRef.current?.contentWindow;
+      const frameWin = htmlScriptsEnabled ? null : frameRef.current?.contentWindow;
       if (frameWin) setCustomHighlights(frameWin, name, []);
     };
 
@@ -1401,7 +1410,7 @@ export default function FileWidget({
       const frameRanges: Range[] = [];
       const hostDoc = contentRef.current?.ownerDocument;
       if (hostDoc) ensureHighlightStyle(hostDoc, name);
-      const frameDoc = frameRef.current?.contentDocument;
+      const frameDoc = htmlScriptsEnabled ? null : frameRef.current?.contentDocument;
       if (frameDoc) ensureHighlightStyle(frameDoc, name);
 
       const groupedMemos = new Map<string, { quote: string; anchor?: QuoteAnchorData; memos: DocumentMemo[] }>();
@@ -1427,14 +1436,14 @@ export default function FileWidget({
       memoRangesRef.current = memoRanges;
 
       setCustomHighlights(window, name, hostRanges);
-      const frameWin = frameRef.current?.contentWindow;
+      const frameWin = htmlScriptsEnabled ? null : frameRef.current?.contentWindow;
       if (frameWin) setCustomHighlights(frameWin, name, frameRanges);
     }, 120);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [memoPanelOpen, memos, content, epubHtml, kind, frameLoadTick, markdownRenderTick, pdfRenderTick, findQuoteRange]);
+  }, [memoPanelOpen, memos, content, epubHtml, kind, htmlScriptsEnabled, frameLoadTick, markdownRenderTick, pdfRenderTick, findQuoteRange]);
 
   const hitMemo = useCallback((clientX: number, clientY: number, selectionWin: Window): MemoRange | null => {
     for (const group of memoRangesRef.current) {
@@ -1496,9 +1505,9 @@ export default function FileWidget({
   useEffect(() => () => {
     const name = highlightNameRef.current;
     setCustomHighlights(window, name, []);
-    const frameWin = frameRef.current?.contentWindow;
+    const frameWin = htmlScriptsEnabled ? null : frameRef.current?.contentWindow;
     if (frameWin) setCustomHighlights(frameWin, name, []);
-  }, []);
+  }, [htmlScriptsEnabled]);
 
   const jumpToQuote = useCallback((quote: string, anchor?: QuoteAnchorData, retryPdf = true) => {
     const needle = quote.trim();
@@ -1536,11 +1545,11 @@ export default function FileWidget({
   }, [findQuoteRange, kind]);
 
   if (!path) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.fileSelectFile")}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.fileSelectFile")}</div>;
   }
 
   if (!file) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.fileNotFound")}: {path}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.fileNotFound")}: {path}</div>;
   }
 
   const openFile = () => void ctx.app.workspace.getLeaf(true).openFile(file);
@@ -1550,17 +1559,17 @@ export default function FileWidget({
   };
 
   const header = showHeader && (
-    <div className="llm-hub-db-file-header">
+    <div className="dashboard-hub-db-file-header">
       <button
         type="button"
-        className={`llm-hub-db-markdown-open${memoPanelOpen ? " is-active" : ""}`}
+        className={`dashboard-hub-db-markdown-open${memoPanelOpen ? " is-active" : ""}`}
         onClick={() => updateConfig(memoPanelOpen ? { memoPanelOpen: false } : { memoPanelOpen: true, memoPanelCollapsed: false })}
         title={t("memo.panelToggle")}
       >
         <NotebookPen size={14} />
       </button>
-      <span className="llm-hub-db-markdown-path" title={path}>{path}</span>
-      <button type="button" className="llm-hub-db-markdown-open" onClick={openFile} title={t("dashboard.kanbanOpenNote")}>
+      <span className="dashboard-hub-db-markdown-path" title={path}>{path}</span>
+      <button type="button" className="dashboard-hub-db-markdown-open" onClick={openFile} title={t("dashboard.kanbanOpenNote")}>
         <ExternalLink size={14} />
       </button>
     </div>
@@ -1568,23 +1577,23 @@ export default function FileWidget({
 
   const body = () => {
     if (loading && (kind !== "markdown" || content === null)) {
-      return <div className="llm-hub-db-widget-empty"><Loader2 size={16} />{t("dashboard.loading")}</div>;
+      return <div className="dashboard-hub-db-widget-empty"><Loader2 size={16} />{t("dashboard.loading")}</div>;
     }
     if (kind === "markdown") {
-      if (content === null) return <div className="llm-hub-db-widget-empty">{t("dashboard.fileNotFound")}</div>;
-      return <div className="llm-hub-db-markdown"><div ref={markdownRef} className="markdown-rendered llm-hub-db-markdown-render-target" /></div>;
+      if (content === null) return <div className="dashboard-hub-db-widget-empty">{t("dashboard.fileNotFound")}</div>;
+      return <div className="dashboard-hub-db-markdown"><div ref={markdownRef} className="markdown-rendered dashboard-hub-db-markdown-render-target" /></div>;
     }
     if (kind === "text") {
-      if (content === null) return <div className="llm-hub-db-widget-empty">{t("dashboard.fileNotFound")}</div>;
+      if (content === null) return <div className="dashboard-hub-db-widget-empty">{t("dashboard.fileNotFound")}</div>;
       return <EditableText value={content} onSave={saveText} />;
     }
     if (kind === "html") {
-      if (content === null) return <div className="llm-hub-db-widget-empty">{t("dashboard.fileNotFound")}</div>;
-      return <HtmlFrame html={content} title={path} onSelectionContextMenu={openSelectionMenu} onSelectionClear={() => setSelectionMenu(null)} frameRef={frameRef} onLoad={() => setFrameLoadTick((value) => value + 1)} />;
+      if (content === null) return <div className="dashboard-hub-db-widget-empty">{t("dashboard.fileNotFound")}</div>;
+      return <HtmlFrame html={content} title={path} allowScripts={htmlScriptsEnabled} onSelectionContextMenu={openSelectionMenu} onSelectionClear={() => setSelectionMenu(null)} frameRef={frameRef} onLoad={() => setFrameLoadTick((value) => value + 1)} />;
     }
     if (kind === "epub") {
-      if (epubError) return <div className="llm-hub-db-widget-empty">{epubError}</div>;
-      if (!epubHtml) return <div className="llm-hub-db-widget-empty"><Loader2 size={16} />{t("dashboard.loading")}</div>;
+      if (epubError) return <div className="dashboard-hub-db-widget-empty">{epubError}</div>;
+      if (!epubHtml) return <div className="dashboard-hub-db-widget-empty"><Loader2 size={16} />{t("dashboard.loading")}</div>;
       return <HtmlFrame
         html={epubHtml}
         title={path}
@@ -1600,7 +1609,7 @@ export default function FileWidget({
     }
     if (kind === "image") {
       return (
-        <div className="llm-hub-db-file-imagewrap">
+        <div className="dashboard-hub-db-file-imagewrap">
           <img src={ctx.app.vault.getResourcePath(file)} alt={path} />
         </div>
       );
@@ -1617,10 +1626,10 @@ export default function FileWidget({
       );
     }
     return (
-      <div className="llm-hub-db-widget-empty">
+      <div className="dashboard-hub-db-widget-empty">
         <FileText size={18} />
         <span>{path}</span>
-        <button type="button" className="llm-hub-db-primary-btn" onClick={openFile}>
+        <button type="button" className="dashboard-hub-db-primary-btn" onClick={openFile}>
           {t("dashboard.openFile")}
         </button>
       </div>
@@ -1628,13 +1637,13 @@ export default function FileWidget({
   };
 
   return (
-    <div className="llm-hub-db-file-wrap">
+    <div className="dashboard-hub-db-file-wrap">
       {header}
-      <div className="llm-hub-db-file-main">
+      <div className="dashboard-hub-db-file-main">
         {memoPanelOpen && memoPanelCollapsed && (
           <button
             type="button"
-            className="llm-hub-db-memo-rail"
+            className="dashboard-hub-db-memo-rail"
             onClick={() => updateConfig({ memoPanelCollapsed: false })}
             title={t("memo.expand")}
           >
@@ -1661,7 +1670,7 @@ export default function FileWidget({
         )}
         <div
           ref={contentRef}
-          className="llm-hub-db-file-content"
+          className="dashboard-hub-db-file-content"
           onContextMenu={handleHostContextMenu}
           onPointerMove={handleHostMemoHover}
           onPointerLeave={(event) => {
@@ -1686,7 +1695,7 @@ export default function FileWidget({
         />
       )}
       {memoHover && createPortal(
-        <div className="llm-hub-db-memo-hover" style={{ left: memoHover.x, top: memoHover.y }}>
+        <div className="dashboard-hub-db-memo-hover" style={{ left: memoHover.x, top: memoHover.y }}>
           {memoHover.count > 1 && <span>{memoHover.count} memos</span>}
           <p>{memoHover.text}</p>
         </div>,

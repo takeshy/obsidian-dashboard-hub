@@ -3,7 +3,7 @@
 
 import type { ReactNode, FC } from "react";
 import type { App } from "obsidian";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 
 export type Breakpoint = "lg" | "sm";
 
@@ -74,7 +74,7 @@ export const DASHBOARD_EXT = ".dashboard";
  */
 export interface WidgetContext {
   app: App;
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   /** Path of the `.dashboard` file (used as the link-resolution source path). */
   sourcePath: string;
   size: { w: number; h: number };
@@ -97,7 +97,7 @@ export interface ConfigEditorProps {
   config: unknown;
   onChange: (next: unknown) => void;
   app: App;
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   widgetId?: string;
   /** Path of the backing `.dashboard` file (e.g. for sidecar result caches). */
   sourcePath?: string;

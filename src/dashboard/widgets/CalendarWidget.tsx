@@ -122,8 +122,8 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
       const loaded = (await Promise.all(files.map(async (file) => parsePosts(await ctx.app.vault.cachedRead(file))))).flat();
       if (!cancelled) {
         setEvents(loaded.filter((post) => post.isEvent && post.eventDate === selected).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-        setTimelinePosts(loaded.filter((post) => dateKey(new Date(post.createdAt)) === selected).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-        setPostDays(new Set(loaded.map((post) => dateKey(new Date(post.createdAt)))));
+        setTimelinePosts(loaded.filter((post) => !post.isEvent && dateKey(new Date(post.createdAt)) === selected).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+        setPostDays(new Set(loaded.filter((post) => !post.isEvent).map((post) => dateKey(new Date(post.createdAt)))));
         setEventDays(new Set(loaded.filter((post) => post.isEvent).map((post) => post.eventDate).filter(Boolean)));
       }
     };
@@ -210,7 +210,7 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
           const summary = post.content.replace(EVENT_MARKER_RE, "").trim();
           await appendTimelineEntry(
             ctx.app.vault,
-            timelineName,
+            ctx.plugin.settings.activityTimelineName,
             `> [!calendar] Calendar event rescheduled\n> \`${post.eventDate}\` → \`${nextDate}\`${summary ? `\n\n${summary}` : ""}`,
             new Date(),
             ctx.plugin.settings.baseDirectory,
@@ -236,39 +236,39 @@ export default function CalendarWidget({ config: rawConfig, ctx }: { config?: un
   // Obsidian's focus trap, which immediately steals focus back on every click.
   const portalTarget = rootRef.current?.closest(".modal") ?? rootRef.current?.ownerDocument.body ?? document.body;
 
-  return <div ref={rootRef} className="llm-hub-db-calendar">
-    <div className="llm-hub-db-calendar-heading">
-      <div className="llm-hub-db-calendar-title"><CalendarDays size={17} /><span>{monthLabel}</span></div>
-      <button type="button" className="llm-hub-db-calendar-today" onClick={goToday}>{t("dashboard.calendarToday")}</button>
+  return <div ref={rootRef} className="dashboard-hub-db-calendar">
+    <div className="dashboard-hub-db-calendar-heading">
+      <div className="dashboard-hub-db-calendar-title"><CalendarDays size={17} /><span>{monthLabel}</span></div>
+      <button type="button" className="dashboard-hub-db-calendar-today" onClick={goToday}>{t("dashboard.calendarToday")}</button>
     </div>
-    <div className="llm-hub-db-calendar-nav">
+    <div className="dashboard-hub-db-calendar-nav">
       <button type="button" aria-label={t("dashboard.calendarPreviousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}><ChevronLeft size={17} /></button>
-      <div className="llm-hub-db-calendar-legend"><span><i className="is-event" />{t("dashboard.calendarEvents")}</span><span><i className="is-post" />Timeline</span></div>
+      <div className="dashboard-hub-db-calendar-legend"><span><i className="is-event" />{t("dashboard.calendarEvents")}</span><span><i className="is-post" />Timeline</span></div>
       <button type="button" aria-label={t("dashboard.calendarNextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}><ChevronRight size={17} /></button>
     </div>
-    <div className="llm-hub-db-calendar-grid">
-      {weekdays.map((label, index) => <div className={`llm-hub-db-calendar-weekday is-${index}`} key={label}>{label}</div>)}
+    <div className="dashboard-hub-db-calendar-grid">
+      {weekdays.map((label, index) => <div className={`dashboard-hub-db-calendar-weekday is-${index}`} key={label}>{label}</div>)}
       {days.map((day, index) => {
         const key = dateKey(day);
-        return <button type="button" key={key} className={`llm-hub-db-calendar-day is-${index % 7}${sameMonth(day, month) ? "" : " is-outside"}${key === today ? " is-today" : ""}${key === selected ? " is-selected" : ""}`} onClick={() => selectDay(day)}>
+        return <button type="button" key={key} className={`dashboard-hub-db-calendar-day is-${index % 7}${sameMonth(day, month) ? "" : " is-outside"}${key === today ? " is-today" : ""}${key === selected ? " is-selected" : ""}`} onClick={() => selectDay(day)}>
           <span>{day.getDate()}</span>
-          <span className="llm-hub-db-calendar-dots">{eventDays.has(key) && <i className="is-event" />}{postDays.has(key) && <i className="is-post" />}</span>
+          <span className="dashboard-hub-db-calendar-dots">{eventDays.has(key) && <i className="is-event" />}{postDays.has(key) && <i className="is-post" />}</span>
         </button>;
       })}
     </div>
-    {detailOpen && createPortal(<div className="llm-hub-db-calendar-modal-backdrop" onMouseDown={() => setDetailOpen(false)}>
-      <div className="llm-hub-db-calendar-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-        <button type="button" className="llm-hub-db-calendar-modal-close" aria-label={t("common.close")} onClick={() => setDetailOpen(false)}><X size={18} /></button>
-        <div className="llm-hub-db-calendar-detail">
-      <div className="llm-hub-db-calendar-detail-heading"><h4>{selectedLabel}</h4><div><span>{events.length + timelinePosts.length}</span><button type="button" title={t("dashboard.calendarAddEvent")} onClick={() => setShowEventForm((value) => !value)}>{showEventForm ? <X size={15} /> : <Plus size={15} />}{t("dashboard.calendarAddEvent")}</button></div></div>
-      {showEventForm && <form className="llm-hub-db-calendar-event-form" onSubmit={(event) => { event.preventDefault(); void saveEvent(); }}>
-        <div className="llm-hub-db-calendar-event-form-title"><span><CalendarPlus size={16} />{t("dashboard.calendarEventFormTitle")}</span><strong>{selected}</strong></div>
-        <label className="llm-hub-db-calendar-event-time-field"><span>{t("dashboard.calendarEventTimeOptional")}</span><input type="time" value={eventTime} onChange={(event) => setEventTime(event.target.value)} /></label>
-        <label className="llm-hub-db-calendar-event-content-field"><span>{t("dashboard.calendarEventContent")}</span><textarea value={eventText} onChange={(event) => setEventText(event.target.value)} placeholder={t("dashboard.calendarEventPlaceholder")} autoFocus /></label>
-        <div className="llm-hub-db-calendar-event-form-actions"><button type="button" onClick={() => { setShowEventForm(false); setEventText(""); setEventTime(""); }}>{t("dashboard.cancel")}</button><button type="submit" className="mod-cta" disabled={!eventText.trim() || savingEvent}>{savingEvent ? t("dashboard.calendarEventSaving") : t("dashboard.calendarEventSave")}</button></div>
+    {detailOpen && createPortal(<div className="dashboard-hub-db-calendar-modal-backdrop" onMouseDown={() => setDetailOpen(false)}>
+      <div className="dashboard-hub-db-calendar-modal" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <button type="button" className="dashboard-hub-db-calendar-modal-close" aria-label={t("common.close")} onClick={() => setDetailOpen(false)}><X size={18} /></button>
+        <div className="dashboard-hub-db-calendar-detail">
+      <div className="dashboard-hub-db-calendar-detail-heading"><h4>{selectedLabel}</h4><div><span>{events.length + timelinePosts.length}</span><button type="button" title={t("dashboard.calendarAddEvent")} onClick={() => setShowEventForm((value) => !value)}>{showEventForm ? <X size={15} /> : <Plus size={15} />}{t("dashboard.calendarAddEvent")}</button></div></div>
+      {showEventForm && <form className="dashboard-hub-db-calendar-event-form" onSubmit={(event) => { event.preventDefault(); void saveEvent(); }}>
+        <div className="dashboard-hub-db-calendar-event-form-title"><span><CalendarPlus size={16} />{t("dashboard.calendarEventFormTitle")}</span><strong>{selected}</strong></div>
+        <label className="dashboard-hub-db-calendar-event-time-field"><span>{t("dashboard.calendarEventTimeOptional")}</span><input type="time" value={eventTime} onChange={(event) => setEventTime(event.target.value)} /></label>
+        <label className="dashboard-hub-db-calendar-event-content-field"><span>{t("dashboard.calendarEventContent")}</span><textarea value={eventText} onChange={(event) => setEventText(event.target.value)} placeholder={t("dashboard.calendarEventPlaceholder")} autoFocus /></label>
+        <div className="dashboard-hub-db-calendar-event-form-actions"><button type="button" onClick={() => { setShowEventForm(false); setEventText(""); setEventTime(""); }}>{t("dashboard.cancel")}</button><button type="submit" className="mod-cta" disabled={!eventText.trim() || savingEvent}>{savingEvent ? t("dashboard.calendarEventSaving") : t("dashboard.calendarEventSave")}</button></div>
       </form>}
-      {events.length > 0 && ctx && <section className="llm-hub-db-calendar-events"><h5><Clock3 size={14} />{t("dashboard.calendarEvents")} <span>{events.length}</span></h5>{events.map((event) => <article key={event.id}><div className="llm-hub-db-calendar-event-date"><span>{t("dashboard.calendarEventDate")}</span><input type="date" value={event.eventDate} onChange={(change) => void changeEventDate(event, change.target.value)} /></div><ObsidianMarkdown app={ctx.app} markdown={event.content} sourcePath={`${timelineRoot}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
-      {events.length === 0 && timelinePosts.length === 0 && !showEventForm ? <div className="llm-hub-db-widget-empty">{t("dashboard.calendarEmpty")}</div> : <>
+      {events.length > 0 && ctx && <section className="dashboard-hub-db-calendar-events"><h5><Clock3 size={14} />{t("dashboard.calendarEvents")} <span>{events.length}</span></h5>{events.map((event) => <article key={event.id}><div className="dashboard-hub-db-calendar-event-date"><span>{t("dashboard.calendarEventDate")}</span><input type="date" value={event.eventDate} onChange={(change) => void changeEventDate(event, change.target.value)} /></div><ObsidianMarkdown app={ctx.app} markdown={event.content} sourcePath={`${timelineRoot}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
+      {events.length === 0 && timelinePosts.length === 0 && !showEventForm ? <div className="dashboard-hub-db-widget-empty">{t("dashboard.calendarEmpty")}</div> : <>
         {timelinePosts.length > 0 && ctx && <section><h5><MessageCircle size={14} />{t("dashboard.calendarTimeline")} <span>{timelinePosts.length}</span></h5>{timelinePosts.map((post) => <article key={post.id}><ObsidianMarkdown app={ctx.app} markdown={post.content} sourcePath={`${timelineRoot}/${timelineName}/${selected}.md`} onInternalLinkClick={openInternalLink} /></article>)}</section>}
       </>}
         </div>

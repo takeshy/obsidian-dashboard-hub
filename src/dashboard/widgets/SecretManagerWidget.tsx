@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode, type SyntheticEvent } from "react";
 import { ChevronDown, ChevronRight, Copy, Eye, ExternalLink, FileKey2, Folder, KeyRound, Loader2, Pencil, Plus, Search, X } from "lucide-react";
-import { Notice, TFile } from "obsidian";
+import { Notice, TFile, TFolder, type TAbstractFile } from "obsidian";
 import { t } from "src/i18n";
+import { filesInVaultFolder, pathIsInVaultFolder } from "src/utils/vaultFiles";
 import type { WidgetContext } from "../types";
 import type { SecretManagerConfig } from "../secretManager";
 import { groupSecretPaths, matchesSecretSearch, normalizeSecretFolder, secretFilePath, type SecretPathRow } from "../secretManager";
@@ -73,23 +74,23 @@ function MetadataEditor({ value, onChange }: { value: string; onChange: (value: 
     commit(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
 
   return (
-    <div className="llm-hub-db-secret-metadata">
-      <div className="llm-hub-db-secret-field-heading">
+    <div className="dashboard-hub-db-secret-metadata">
+      <div className="dashboard-hub-db-secret-field-heading">
         <div>
           <span>{t("dashboard.secretMetadata")}</span>
           <small>{t("dashboard.secretMetadataHint")}</small>
         </div>
         <button
           type="button"
-          className="llm-hub-db-secret-add-metadata"
+          className="dashboard-hub-db-secret-add-metadata"
           onClick={() => commit([...rows, { key: "", value: "" }])}
         >
           <Plus size={13} /> {t("dashboard.secretMetadataAdd")}
         </button>
       </div>
-      <div className="llm-hub-db-secret-metadata-rows">
+      <div className="dashboard-hub-db-secret-metadata-rows">
         {rows.map((row, index) => (
-          <div className="llm-hub-db-secret-metadata-row" key={index}>
+          <div className="dashboard-hub-db-secret-metadata-row" key={index}>
             <input
               aria-label={t("dashboard.secretMetadataKey")}
               placeholder={t("dashboard.secretMetadataKey")}
@@ -105,7 +106,7 @@ function MetadataEditor({ value, onChange }: { value: string; onChange: (value: 
             />
             <button
               type="button"
-              className="llm-hub-db-iconbtn"
+              className="dashboard-hub-db-iconbtn"
               aria-label={t("dashboard.remove")}
               onClick={() => commit(rows.length === 1 ? [{ key: "", value: "" }] : rows.filter((_, rowIndex) => rowIndex !== index))}
             ><X size={14} /></button>
@@ -120,9 +121,9 @@ function MetadataDisplay({ metadata }: { metadata: Record<string, string> }) {
   const items = Object.entries(metadata);
   if (items.length === 0) return null;
   return (
-    <section className="llm-hub-db-secret-detail-section">
-      <span className="llm-hub-db-secret-detail-label">{t("dashboard.secretMetadata")}</span>
-      <dl className="llm-hub-db-secret-metadata-display">
+    <section className="dashboard-hub-db-secret-detail-section">
+      <span className="dashboard-hub-db-secret-detail-label">{t("dashboard.secretMetadata")}</span>
+      <dl className="dashboard-hub-db-secret-metadata-display">
         {items.map(([key, value]) => (
           <div key={key}>
             <dt>{key}</dt>
@@ -144,7 +145,7 @@ function formatModifiedTime(file: TFile): string {
 
 export default function SecretManagerWidget({ config, ctx }: { config: unknown; ctx?: WidgetContext }) {
   const cfg = (config ?? {}) as SecretManagerConfig;
-  const folder = normalizeSecretFolder(cfg.folder ?? "");
+  const folder = normalizeSecretFolder(cfg.folder ?? "") || "Secrets";
   const [entries, setEntries] = useState<SecretEntry[] | null>(null);
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState<SecretDraft>(EMPTY_DRAFT);
@@ -158,34 +159,72 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
   const [saving, setSaving] = useState(false);
   const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>({});
 
+  const isSecretPath = useCallback((path: string) =>
+    path.toLocaleLowerCase().endsWith(".encrypted") && pathIsInVaultFolder(path, folder), [folder]);
+  const folderEventAffectsSecrets = useCallback((path: string) => {
+    const eventPath = path.toLocaleLowerCase();
+    const secretFolder = folder.toLocaleLowerCase();
+    return eventPath === secretFolder || eventPath.startsWith(`${secretFolder}/`) ||
+      secretFolder.startsWith(`${eventPath}/`);
+  }, [folder]);
+
+  const readEntry = useCallback(async (file: TFile): Promise<SecretEntry> => {
+    if (!ctx) throw new Error("Missing widget context");
+    try {
+      const metadata = getEncryptedFileMetadata(await ctx.app.vault.cachedRead(file));
+      return { file, name: displayName(file), description: metadata.description ?? "", publicMetadata: metadata.publicMetadata ?? {} };
+    } catch {
+      return { file, name: displayName(file), description: "", publicMetadata: {} };
+    }
+  }, [ctx]);
+
   const refresh = useCallback(async () => {
-    if (!ctx) return;
-    const prefix = folder ? `${folder}/`.toLocaleLowerCase() : "";
-    const files = ctx.app.vault.getFiles().filter((file) =>
-      file.extension.toLocaleLowerCase() === "encrypted" && (!prefix || file.path.toLocaleLowerCase().startsWith(prefix)));
-    const next = await Promise.all(files.map(async (file): Promise<SecretEntry> => {
-      try {
-        const metadata = getEncryptedFileMetadata(await ctx.app.vault.cachedRead(file));
-        return { file, name: displayName(file), description: metadata.description ?? "", publicMetadata: metadata.publicMetadata ?? {} };
-      } catch {
-        return { file, name: displayName(file), description: "", publicMetadata: {} };
-      }
-    }));
+    if (!ctx || !folder) {
+      setEntries([]);
+      return;
+    }
+    const files = filesInVaultFolder(ctx.app.vault, folder).filter((file) =>
+      file.extension.toLocaleLowerCase() === "encrypted");
+    const next = await Promise.all(files.map(readEntry));
     next.sort((a, b) => a.name.localeCompare(b.name));
     setEntries(next);
-  }, [ctx, folder]);
+  }, [ctx, folder, readEntry]);
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     if (!ctx) return;
+    const removePath = (path: string) => setEntries((current) =>
+      current?.filter((entry) => entry.file.path !== path) ?? []);
+    const upsert = async (file: TFile) => {
+      if (!isSecretPath(file.path)) return;
+      const entry = await readEntry(file);
+      setEntries((current) => {
+        const next = (current ?? []).filter((item) => item.file.path !== file.path);
+        next.push(entry);
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
+    };
     const refs = [
-      ctx.app.vault.on("create", () => void refresh()),
-      ctx.app.vault.on("modify", () => void refresh()),
-      ctx.app.vault.on("delete", () => void refresh()),
-      ctx.app.vault.on("rename", () => void refresh()),
+      ctx.app.vault.on("create", (file: TAbstractFile) => {
+        if (file instanceof TFile) void upsert(file);
+        else if (file instanceof TFolder && file.path === folder) void refresh();
+      }),
+      ctx.app.vault.on("modify", (file: TAbstractFile) => {
+        if (file instanceof TFile) void upsert(file);
+      }),
+      ctx.app.vault.on("delete", (file: TAbstractFile) => {
+        if (file instanceof TFile && isSecretPath(file.path)) removePath(file.path);
+        else if (file instanceof TFolder && folderEventAffectsSecrets(file.path)) void refresh();
+      }),
+      ctx.app.vault.on("rename", (file: TAbstractFile, oldPath: string) => {
+        if (oldPath.toLocaleLowerCase().endsWith(".encrypted")) removePath(oldPath);
+        if (file instanceof TFile) void upsert(file);
+        else if (file instanceof TFolder &&
+          (folderEventAffectsSecrets(oldPath) || folderEventAffectsSecrets(file.path))) void refresh();
+      }),
     ];
     return () => refs.forEach((ref) => ctx.app.vault.offref(ref));
-  }, [ctx, refresh]);
+  }, [ctx, folder, folderEventAffectsSecrets, isSecretPath, readEntry, refresh]);
 
   const filtered = useMemo(() => (entries ?? []).filter((entry) =>
     matchesSecretSearch(entry.name, entry.description, query, entry.publicMetadata)), [entries, query]);
@@ -270,7 +309,7 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
 
   const renderSecretEntry = (entry: SecretEntry): ReactNode => (
     <div
-      className="llm-hub-db-secret-row"
+      className="dashboard-hub-db-secret-row"
       key={entry.file.path}
       role="button"
       tabIndex={0}
@@ -280,14 +319,14 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
       }}
     >
       <FileKey2 size={16} />
-      <div className="llm-hub-db-secret-info">
+      <div className="dashboard-hub-db-secret-info">
         <strong>{entry.name}</strong>
         {entry.description && <span>{entry.description}</span>}
         {Object.keys(entry.publicMetadata).length > 0 && <small>{formatMetadata(entry.publicMetadata).replace(/\n/g, " · ")}</small>}
         <small>{formatModifiedTime(entry.file)}</small>
       </div>
-      <button type="button" className="llm-hub-db-iconbtn" title={t("dashboard.secretCopy")} disabled={copying === entry.file.path} onClick={(event) => { event.stopPropagation(); void copyDecrypted(entry); }}>
-        {copying === entry.file.path ? <Loader2 className="llm-hub-spin" size={14} /> : <Copy size={14} />}
+      <button type="button" className="dashboard-hub-db-iconbtn" title={t("dashboard.secretCopy")} disabled={copying === entry.file.path} onClick={(event) => { event.stopPropagation(); void copyDecrypted(entry); }}>
+        {copying === entry.file.path ? <Loader2 className="dashboard-hub-spin" size={14} /> : <Copy size={14} />}
       </button>
     </div>
   );
@@ -299,10 +338,10 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
     }
     const expanded = query.trim().length > 0 || (groupExpanded[row.folderPath] ?? false);
     return (
-      <div className="llm-hub-db-secret-group" key={`group:${row.folderPath}`}>
+      <div className="dashboard-hub-db-secret-group" key={`group:${row.folderPath}`}>
         <button
           type="button"
-          className="llm-hub-db-secret-group-header"
+          className="dashboard-hub-db-secret-group-header"
           aria-expanded={expanded}
           onClick={() => setGroupExpanded((previous) => ({
             ...previous,
@@ -314,16 +353,16 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
           <span title={row.folderPath}>{row.folderPath}</span>
           <small>{row.items.length}</small>
         </button>
-        {expanded && <div className="llm-hub-db-secret-group-children">{row.children.map(renderRow)}</div>}
+        {expanded && <div className="dashboard-hub-db-secret-group-children">{row.children.map(renderRow)}</div>}
       </div>
     );
   }
 
   if (!ctx) return null;
   return (
-    <div className="llm-hub-db-secret-manager">
-      <div className="llm-hub-db-secret-toolbar">
-        <div className="llm-hub-db-secret-search">
+    <div className="dashboard-hub-db-secret-manager">
+      <div className="dashboard-hub-db-secret-toolbar">
+        <div className="dashboard-hub-db-secret-search">
           <Search size={15} aria-hidden="true" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("dashboard.secretSearch")} />
           {query && (
@@ -332,14 +371,14 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
             </button>
           )}
         </div>
-        <button type="button" className="llm-hub-db-primary-btn" onClick={() => { setDraft(EMPTY_DRAFT); setCreatePassword(sessionPassword()); setCreateOpen(true); setError(""); }}>
+        <button type="button" className="dashboard-hub-db-primary-btn" onClick={() => { setDraft(EMPTY_DRAFT); setCreatePassword(sessionPassword()); setCreateOpen(true); setError(""); }}>
           <Plus size={13} /> {t("dashboard.secretNew")}
         </button>
       </div>
-      {entries === null ? <div className="llm-hub-db-widget-empty"><Loader2 className="llm-hub-spin" size={18} /></div> : (
-        <div className="llm-hub-db-secret-list">
+      {entries === null ? <div className="dashboard-hub-db-widget-empty"><Loader2 className="dashboard-hub-spin" size={18} /></div> : (
+        <div className="dashboard-hub-db-secret-list">
           {groupedRows.map(renderRow)}
-          {filtered.length === 0 && <div className="llm-hub-db-widget-empty">{t("dashboard.secretEmpty")}</div>}
+          {filtered.length === 0 && <div className="dashboard-hub-db-widget-empty">{t("dashboard.secretEmpty")}</div>}
         </div>
       )}
 
@@ -353,41 +392,41 @@ export default function SecretManagerWidget({ config, ctx }: { config: unknown; 
       )}
 
       {createOpen && (
-        <div className="llm-hub-db-secret-overlay" onClick={() => setCreateOpen(false)}>
-          <form className="llm-hub-db-secret-dialog" onClick={(event) => event.stopPropagation()} onSubmit={(event) => void createSecret(event)}>
-            <div className="llm-hub-db-secret-dialog-title">
-              <div className="llm-hub-db-secret-dialog-heading">
-                <span className="llm-hub-db-secret-dialog-icon"><KeyRound size={18} /></span>
+        <div className="dashboard-hub-db-secret-overlay" onClick={() => setCreateOpen(false)}>
+          <form className="dashboard-hub-db-secret-dialog" onClick={(event) => event.stopPropagation()} onSubmit={(event) => void createSecret(event)}>
+            <div className="dashboard-hub-db-secret-dialog-title">
+              <div className="dashboard-hub-db-secret-dialog-heading">
+                <span className="dashboard-hub-db-secret-dialog-icon"><KeyRound size={18} /></span>
                 <div>
                   <strong>{t("dashboard.secretNew")}</strong>
                   <small>{t("dashboard.secretNewHint")}</small>
                 </div>
               </div>
-              <button type="button" className="llm-hub-db-iconbtn" onClick={() => setCreateOpen(false)}><X size={16} /></button>
+              <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => setCreateOpen(false)}><X size={16} /></button>
             </div>
-            <div className="llm-hub-db-secret-dialog-body">
+            <div className="dashboard-hub-db-secret-dialog-body">
               <label>{t("dashboard.secretName")}<input autoFocus required value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
               <label>{t("dashboard.secretDescription")}<input value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
               <MetadataEditor value={draft.metadata} onChange={(metadata) => setDraft({ ...draft, metadata })} />
               <label>{t("dashboard.secretValue")}<textarea required rows={1} className="is-secret" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} /></label>
               <label>{t("dashboard.secretPassword")}<input required type="password" value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} /></label>
-              {error && <p className="llm-hub-db-secret-error">{error}</p>}
+              {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
             </div>
-            <div className="llm-hub-db-secret-dialog-footer">
+            <div className="dashboard-hub-db-secret-dialog-footer">
               <button type="button" onClick={() => setCreateOpen(false)}>{t("common.cancel")}</button>
-              <button className="llm-hub-db-primary-btn" type="submit" disabled={saving || !createPassword}>{saving ? t("dashboard.secretSaving") : t("dashboard.save")}</button>
+              <button className="dashboard-hub-db-primary-btn" type="submit" disabled={saving || !createPassword}>{saving ? t("dashboard.secretSaving") : t("dashboard.save")}</button>
             </div>
           </form>
         </div>
       )}
 
       {passwordEntry && (
-        <div className="llm-hub-db-secret-overlay" onClick={() => setPasswordEntry(null)}>
-          <form className="llm-hub-db-secret-dialog is-compact" onClick={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); void copyDecrypted(passwordEntry, password); }}>
+        <div className="dashboard-hub-db-secret-overlay" onClick={() => setPasswordEntry(null)}>
+          <form className="dashboard-hub-db-secret-dialog is-compact" onClick={(event) => event.stopPropagation()} onSubmit={(event) => { event.preventDefault(); void copyDecrypted(passwordEntry, password); }}>
             <strong>{t("dashboard.secretPassword")}</strong>
             <input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-            {error && <p className="llm-hub-db-secret-error">{error}</p>}
-            <button className="llm-hub-db-primary-btn" type="submit" disabled={!password || copying !== null}>{t("dashboard.secretUnlockCopy")}</button>
+            {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
+            <button className="dashboard-hub-db-primary-btn" type="submit" disabled={!password || copying !== null}>{t("dashboard.secretUnlockCopy")}</button>
           </form>
         </div>
       )}
@@ -514,57 +553,57 @@ function SecretViewDialog({
   };
 
   return (
-    <div className="llm-hub-db-secret-overlay" onClick={onClose}>
-      <div className="llm-hub-db-secret-dialog" onClick={(event) => event.stopPropagation()}>
-        <div className="llm-hub-db-secret-dialog-title">
-          <div className="llm-hub-db-secret-dialog-heading">
-            <span className="llm-hub-db-secret-dialog-icon"><FileKey2 size={18} /></span>
+    <div className="dashboard-hub-db-secret-overlay" onClick={onClose}>
+      <div className="dashboard-hub-db-secret-dialog" onClick={(event) => event.stopPropagation()}>
+        <div className="dashboard-hub-db-secret-dialog-title">
+          <div className="dashboard-hub-db-secret-dialog-heading">
+            <span className="dashboard-hub-db-secret-dialog-icon"><FileKey2 size={18} /></span>
             <div>
               <strong>{entry.name}</strong>
               <small>{formatModifiedTime(entry.file)}</small>
             </div>
           </div>
-          <div className="llm-hub-db-secret-dialog-title-actions">
-            <button type="button" className="llm-hub-db-iconbtn" onClick={openFile} title={t("dashboard.openFile")} aria-label={t("dashboard.openFile")}><ExternalLink size={16} /></button>
-            <button type="button" className="llm-hub-db-iconbtn" onClick={onClose} aria-label={t("dashboard.cancel")}><X size={16} /></button>
+          <div className="dashboard-hub-db-secret-dialog-title-actions">
+            <button type="button" className="dashboard-hub-db-iconbtn" onClick={openFile} title={t("dashboard.openFile")} aria-label={t("dashboard.openFile")}><ExternalLink size={16} /></button>
+            <button type="button" className="dashboard-hub-db-iconbtn" onClick={onClose} aria-label={t("dashboard.cancel")}><X size={16} /></button>
           </div>
         </div>
-        {loading ? <div className="llm-hub-db-widget-empty"><Loader2 className="llm-hub-spin" size={18} /></div> : editMode && secretValue !== null ? (
-          <form className="llm-hub-db-secret-edit-form" onSubmit={(event) => void save(event)}>
+        {loading ? <div className="dashboard-hub-db-widget-empty"><Loader2 className="dashboard-hub-spin" size={18} /></div> : editMode && secretValue !== null ? (
+          <form className="dashboard-hub-db-secret-edit-form" onSubmit={(event) => void save(event)}>
             <label>{t("dashboard.secretDescription")}<input value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
             <MetadataEditor value={draft.metadata} onChange={(metadata) => setDraft({ ...draft, metadata })} />
             <label>{t("dashboard.secretValue")}<textarea required rows={1} className="is-secret" value={draft.value} onChange={(event) => setDraft({ ...draft, value: event.target.value })} /></label>
-            {error && <p className="llm-hub-db-secret-error">{error}</p>}
-            <div className="llm-hub-db-secret-actions">
+            {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
+            <div className="dashboard-hub-db-secret-actions">
               <button type="button" onClick={() => setEditMode(false)}>{t("common.cancel")}</button>
-              <button className="llm-hub-db-primary-btn" type="submit" disabled={busy}>{busy ? t("dashboard.secretSaving") : t("dashboard.save")}</button>
+              <button className="dashboard-hub-db-primary-btn" type="submit" disabled={busy}>{busy ? t("dashboard.secretSaving") : t("dashboard.save")}</button>
             </div>
           </form>
         ) : secretValue !== null ? (
-          <div className="llm-hub-db-secret-detail">
+          <div className="dashboard-hub-db-secret-detail">
             {entry.description && (
-              <section className="llm-hub-db-secret-detail-section">
-                <span className="llm-hub-db-secret-detail-label">{t("dashboard.secretDescription")}</span>
-                <p className="llm-hub-db-secret-description">{entry.description}</p>
+              <section className="dashboard-hub-db-secret-detail-section">
+                <span className="dashboard-hub-db-secret-detail-label">{t("dashboard.secretDescription")}</span>
+                <p className="dashboard-hub-db-secret-description">{entry.description}</p>
               </section>
             )}
             <MetadataDisplay metadata={entry.publicMetadata} />
-            <section className="llm-hub-db-secret-detail-section">
-              <span className="llm-hub-db-secret-detail-label">{t("dashboard.secretValue")}</span>
-              <textarea className="is-secret llm-hub-db-secret-value" readOnly value={secretValue} aria-label={t("dashboard.secretValue")} />
+            <section className="dashboard-hub-db-secret-detail-section">
+              <span className="dashboard-hub-db-secret-detail-label">{t("dashboard.secretValue")}</span>
+              <textarea className="is-secret dashboard-hub-db-secret-value" readOnly value={secretValue} aria-label={t("dashboard.secretValue")} />
             </section>
-            {error && <p className="llm-hub-db-secret-error">{error}</p>}
-            <div className="llm-hub-db-secret-actions">
+            {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
+            <div className="dashboard-hub-db-secret-actions">
               <button type="button" onClick={() => void copy()}><Copy size={13} /> {t("dashboard.secretCopy")}</button>
               <button type="button" onClick={beginEdit}><Pencil size={13} /> {t("dashboard.secretEditValue")}</button>
             </div>
           </div>
         ) : (
-          <form className="llm-hub-db-secret-unlock" onSubmit={(event) => void unlock(event)}>
+          <form className="dashboard-hub-db-secret-unlock" onSubmit={(event) => void unlock(event)}>
             <Eye size={20} />
             <label>{t("dashboard.secretPassword")}<input autoFocus type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-            {error && <p className="llm-hub-db-secret-error">{error}</p>}
-            <button className="llm-hub-db-primary-btn" type="submit" disabled={!password || busy}>{t("dashboard.secretUnlock")}</button>
+            {error && <p className="dashboard-hub-db-secret-error">{error}</p>}
+            <button className="dashboard-hub-db-primary-btn" type="submit" disabled={!password || busy}>{t("dashboard.secretUnlock")}</button>
           </form>
         )}
       </div>

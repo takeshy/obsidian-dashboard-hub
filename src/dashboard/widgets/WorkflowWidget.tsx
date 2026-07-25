@@ -169,14 +169,14 @@ export default function WorkflowWidget({
   if (!ctx) return null;
 
   if (!workflowAvailable) {
-    return <div className="llm-hub-db-widget-empty">Connect an AI Hub plugin to run workflows.</div>;
+    return <div className="dashboard-hub-db-widget-empty">Connect an AI Hub plugin to run workflows.</div>;
   }
 
   if (!cfg.workflow) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.selectWorkflow")}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.selectWorkflow")}</div>;
   }
   if (loading) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.loading")}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.loading")}</div>;
   }
 
   const hasError = record?.status === "error";
@@ -185,14 +185,14 @@ export default function WorkflowWidget({
   let body: React.ReactNode;
   if (!record || !hasText) {
     body = (
-      <div className="llm-hub-db-widget-empty">
+      <div className="dashboard-hub-db-widget-empty">
         {hasError ? record?.error : t("dashboard.workflowNotRun")}
       </div>
     );
   } else if (output === "html") {
     body = (
       <iframe
-        className="llm-hub-db-web"
+        className="dashboard-hub-db-web"
         srcDoc={record.text}
         sandbox="allow-scripts"
         title="workflow-output"
@@ -204,29 +204,29 @@ export default function WorkflowWidget({
         app={ctx.app}
         markdown={record.text ?? ""}
         sourcePath={dashboardPath}
-        className="llm-hub-db-markdown"
+        className="dashboard-hub-db-markdown"
       />
     );
   }
 
   return (
-    <div className="llm-hub-db-wf">
-      <div className="llm-hub-db-wf-header">
-        <div className="llm-hub-db-wf-meta">
+    <div className="dashboard-hub-db-wf">
+      <div className="dashboard-hub-db-wf-header">
+        <div className="dashboard-hub-db-wf-meta">
           {record && (
-            <span className="llm-hub-db-wf-time">
+            <span className="dashboard-hub-db-wf-time">
               <Clock size={11} /> {formatTime(record.ranAt)}
             </span>
           )}
           {hasError && hasText && (
-            <span className="llm-hub-db-wf-stale">
+            <span className="dashboard-hub-db-wf-stale">
               <AlertCircle size={11} /> {t("dashboard.stale")}
             </span>
           )}
         </div>
-        <div className="llm-hub-db-wf-actions">
+        <div className="dashboard-hub-db-wf-actions">
           <button
-            className="llm-hub-db-wf-btn"
+            className="dashboard-hub-db-wf-btn"
             onClick={(e) => {
               e.stopPropagation();
               void executeWorkflow();
@@ -239,7 +239,7 @@ export default function WorkflowWidget({
           </button>
           {executing && (
             <button
-              className="llm-hub-db-wf-btn is-danger"
+              className="dashboard-hub-db-wf-btn is-danger"
               onClick={(e) => {
                 e.stopPropagation();
                 execAbortRef.current?.abort();
@@ -254,9 +254,9 @@ export default function WorkflowWidget({
         </div>
       </div>
       {hasError && !hasText && record?.error && (
-        <div className="llm-hub-db-wf-error">{record.error}</div>
+        <div className="dashboard-hub-db-wf-error">{record.error}</div>
       )}
-      <div className="llm-hub-db-wf-body">{body}</div>
+      <div className="dashboard-hub-db-wf-body">{body}</div>
     </div>
   );
 }

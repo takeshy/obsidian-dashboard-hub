@@ -26,7 +26,7 @@ export class ConfirmModal extends Modal {
     contentEl.empty();
     contentEl.createEl("p", { text: this.message });
 
-    const actions = contentEl.createDiv({ cls: "llm-hub-modal-actions" });
+    const actions = contentEl.createDiv({ cls: "dashboard-hub-modal-actions" });
 
     const confirmBtn = actions.createEl("button", {
       text: this.confirmText,

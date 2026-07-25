@@ -31,7 +31,7 @@ export default function BaseWidget({
   if (!ctx) return null;
 
   if (!basePath) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.baseSelectFile")}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.baseSelectFile")}</div>;
   }
 
   const file = ctx.app.vault.getAbstractFileByPath(basePath);
@@ -51,7 +51,7 @@ export default function BaseWidget({
       app={ctx.app}
       markdown={embed}
       sourcePath={ctx.sourcePath}
-      className="llm-hub-db-base"
+      className="dashboard-hub-db-base"
     />
   );
 }

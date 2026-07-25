@@ -1,7 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { TextFileView, type IconName, type WorkspaceLeaf } from "obsidian";
 import { KanbanEditor } from "src/dashboard/KanbanEditor";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 
 export const KANBAN_VIEW_TYPE = "dashboard-hub-kanban-view";
 
@@ -9,7 +9,7 @@ export class KanbanView extends TextFileView {
   private reactRoot: Root | null = null;
   private currentData = "";
 
-  constructor(leaf: WorkspaceLeaf, private plugin: LlmHubPlugin) {
+  constructor(leaf: WorkspaceLeaf, private plugin: DashboardHubPlugin) {
     super(leaf);
   }
 
@@ -50,7 +50,7 @@ export class KanbanView extends TextFileView {
     this.reactRoot?.unmount();
     const container = this.contentEl;
     container.empty();
-    container.addClass("llm-hub-dashboard-container");
+    container.addClass("dashboard-hub-dashboard-container");
     this.reactRoot = createRoot(container);
     this.reactRoot.render(
       <KanbanEditor

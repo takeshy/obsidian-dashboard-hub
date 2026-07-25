@@ -70,8 +70,8 @@ export default function MemoListWidget({ ctx }: { ctx?: WidgetContext }) {
   }
 
   return (
-    <div className="llm-hub-db-memolist">
-      <div className="llm-hub-db-memolist-search">
+    <div className="dashboard-hub-db-memolist">
+      <div className="dashboard-hub-db-memolist-search">
         <Search size={13} />
         <input
           value={query}
@@ -82,11 +82,11 @@ export default function MemoListWidget({ ctx }: { ctx?: WidgetContext }) {
           placeholder={t("memoList.filterPlaceholder")}
         />
       </div>
-      <div className="llm-hub-db-memolist-body">
+      <div className="dashboard-hub-db-memolist-body">
         {rows === null ? (
-          <div className="llm-hub-db-widget-empty"><Loader2 size={16} /></div>
+          <div className="dashboard-hub-db-widget-empty"><Loader2 size={16} /></div>
         ) : pageItems.length === 0 ? (
-          <div className="llm-hub-db-widget-empty">{t("memoList.empty")}</div>
+          <div className="dashboard-hub-db-widget-empty">{t("memoList.empty")}</div>
         ) : (
           pageItems.map((row) => {
             const latest = row.memos[row.memos.length - 1];
@@ -94,7 +94,7 @@ export default function MemoListWidget({ ctx }: { ctx?: WidgetContext }) {
               <button
                 key={row.file.path}
                 type="button"
-                className="llm-hub-db-memolist-row"
+                className="dashboard-hub-db-memolist-row"
                 title={row.source}
                 onClick={() => {
                   setSelectedSource(row.source);
@@ -111,7 +111,7 @@ export default function MemoListWidget({ ctx }: { ctx?: WidgetContext }) {
                 }}
               >
                 <FileText size={14} />
-                <span className="llm-hub-db-memolist-text">
+                <span className="dashboard-hub-db-memolist-text">
                   <strong>{baseName(row.source)}</strong>
                   <small>{row.source}</small>
                   {latest && <em>{row.memos.length} {t("memo.countUnit")} - {latest.text}</em>}
@@ -123,12 +123,12 @@ export default function MemoListWidget({ ctx }: { ctx?: WidgetContext }) {
         )}
       </div>
       {items.length > PAGE_SIZE && (
-        <div className="llm-hub-db-memolist-pager">
-          <button type="button" className="llm-hub-db-iconbtn" disabled={currentPage <= 0} onClick={() => setPage((v) => Math.max(0, v - 1))}>
+        <div className="dashboard-hub-db-memolist-pager">
+          <button type="button" className="dashboard-hub-db-iconbtn" disabled={currentPage <= 0} onClick={() => setPage((v) => Math.max(0, v - 1))}>
             <ChevronLeft size={14} />
           </button>
           <span>{currentPage + 1} / {pageCount}</span>
-          <button type="button" className="llm-hub-db-iconbtn" disabled={currentPage >= pageCount - 1} onClick={() => setPage((v) => Math.min(pageCount - 1, v + 1))}>
+          <button type="button" className="dashboard-hub-db-iconbtn" disabled={currentPage >= pageCount - 1} onClick={() => setPage((v) => Math.min(pageCount - 1, v + 1))}>
             <ChevronRight size={14} />
           </button>
         </div>

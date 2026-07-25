@@ -8,7 +8,7 @@
 // survive reopen without bloating the `.dashboard` file.
 
 import type { App } from "obsidian";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 import { ensureVaultFolder } from "../dashboardFile";
 import { DASHBOARD_FOLDER } from "../types";
 
@@ -25,7 +25,7 @@ export interface WorkflowCacheRecord {
  * Dashboard owns only the UI and result cache.
  */
 export async function runWorkflowText(
-  plugin: LlmHubPlugin,
+  plugin: DashboardHubPlugin,
   workflowPath: string,
   outputVariable: string | undefined,
   abortSignal: AbortSignal,

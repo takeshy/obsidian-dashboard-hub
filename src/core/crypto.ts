@@ -11,6 +11,10 @@
  * 1. Derive RSA private key from password
  * 2. Decrypt AES key with RSA private key
  * 3. Decrypt data with AES key
+ *
+ * The RSA layer is intentional: a secret can be created or updated with the
+ * public key while the password-protected private key remains locked. The
+ * password is therefore needed for reading, but not for writing new values.
  */
 
 // Generate RSA key pair for encryption
@@ -38,8 +42,16 @@ export async function generateKeyPair(): Promise<{
   };
 }
 
-// Derive key from password using PBKDF2
-async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promise<CryptoKey> {
+const LEGACY_KDF_ITERATIONS = 100_000;
+export const CURRENT_CRYPTO_VERSION = 1;
+export const CURRENT_KDF_ITERATIONS = 600_000;
+
+// Derive key from password using PBKDF2-SHA256.
+async function deriveKeyFromPassword(
+  password: string,
+  salt: Uint8Array,
+  iterations: number,
+): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const passwordKey = await crypto.subtle.importKey(
     "raw",
@@ -53,7 +65,7 @@ async function deriveKeyFromPassword(password: string, salt: Uint8Array): Promis
     {
       name: "PBKDF2",
       salt: salt.buffer as ArrayBuffer,
-      iterations: 100000,
+      iterations,
       hash: "SHA-256",
     },
     passwordKey,
@@ -69,7 +81,7 @@ export async function encryptPrivateKey(
   password: string
 ): Promise<{ encryptedPrivateKey: string; salt: string }> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const derivedKey = await deriveKeyFromPassword(password, salt);
+  const derivedKey = await deriveKeyFromPassword(password, salt, CURRENT_KDF_ITERATIONS);
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoder = new TextEncoder();
@@ -95,10 +107,11 @@ export async function encryptPrivateKey(
 export async function decryptPrivateKey(
   encryptedPrivateKey: string,
   salt: string,
-  password: string
+  password: string,
+  iterations = CURRENT_KDF_ITERATIONS,
 ): Promise<string> {
   const saltBuffer = base64ToArrayBuffer(salt);
-  const derivedKey = await deriveKeyFromPassword(password, new Uint8Array(saltBuffer));
+  const derivedKey = await deriveKeyFromPassword(password, new Uint8Array(saltBuffer), iterations);
 
   const combined = new Uint8Array(base64ToArrayBuffer(encryptedPrivateKey));
   const iv = combined.slice(0, 12);
@@ -293,7 +306,23 @@ export function wrapEncryptedFile(
     Object.keys(publicMetadata).length > 0 ? `publicMetadata: ${JSON.stringify(publicMetadata)}` : "",
   ].filter(Boolean);
   const metadataBlock = metadataLines.length > 0 ? `${metadataLines.join("\n")}\n` : "";
-  return `---\nencrypted: true\n${metadataBlock}key: ${key}\nsalt: ${salt}\n---\n${data}`;
+  return `---\nencrypted: true\ncryptoVersion: ${CURRENT_CRYPTO_VERSION}\nkdf: PBKDF2-SHA256\nkdfIterations: ${CURRENT_KDF_ITERATIONS}\n${metadataBlock}key: ${key}\nsalt: ${salt}\n---\n${data}`;
+}
+
+function parseCryptoParameters(frontmatter: string): { version: number; kdfIterations: number } {
+  const versionMatch = frontmatter.match(/^cryptoVersion:\s*(\d+)\s*$/m);
+  if (!versionMatch) {
+    // Files written before cryptoVersion was introduced used 100,000 rounds.
+    return { version: 0, kdfIterations: LEGACY_KDF_ITERATIONS };
+  }
+  const version = Number(versionMatch[1]);
+  const kdfMatch = frontmatter.match(/^kdf:\s*(\S+)\s*$/m);
+  const iterationsMatch = frontmatter.match(/^kdfIterations:\s*(\d+)\s*$/m);
+  if (version !== CURRENT_CRYPTO_VERSION || kdfMatch?.[1] !== "PBKDF2-SHA256" ||
+      Number(iterationsMatch?.[1]) !== CURRENT_KDF_ITERATIONS) {
+    throw new Error("Unsupported encrypted file version");
+  }
+  return { version, kdfIterations: CURRENT_KDF_ITERATIONS };
 }
 
 // Extract encryption info from YAML frontmatter format
@@ -303,6 +332,8 @@ export function unwrapEncryptedFile(content: string): {
   salt: string;
   description: string;
   publicMetadata: Record<string, string>;
+  cryptoVersion: number;
+  kdfIterations: number;
 } | null {
   // Normalize line endings to \n for reliable parsing
   const normalized = content.replace(/\r\n/g, "\n");
@@ -316,12 +347,15 @@ export function unwrapEncryptedFile(content: string): {
   const saltMatch = frontmatter[1].match(/^salt:\s*(.+)$/m);
   if (!keyMatch || !saltMatch) return null;
 
+  const cryptoParameters = parseCryptoParameters(frontmatter[1]);
   return {
     key: keyMatch[1].trim(),
     salt: saltMatch[1].trim(),
     data: frontmatter[2].trim(),
     description: parseJsonStringField(frontmatter[1], "description"),
     publicMetadata: parsePublicMetadata(frontmatter[1]),
+    cryptoVersion: cryptoParameters.version,
+    kdfIterations: cryptoParameters.kdfIterations,
   };
 }
 
@@ -393,7 +427,12 @@ export async function decryptFileContent(
     throw new Error("Invalid encrypted file format");
   }
 
-  const privateKey = await decryptPrivateKey(encrypted.key, encrypted.salt, password);
+  const privateKey = await decryptPrivateKey(
+    encrypted.key,
+    encrypted.salt,
+    password,
+    encrypted.kdfIterations,
+  );
   return decryptData(encrypted.data, privateKey);
 }
 

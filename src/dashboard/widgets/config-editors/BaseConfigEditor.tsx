@@ -429,10 +429,10 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
 
   if (!cfg.base) {
     return (
-      <div className="llm-hub-db-fields">
-        <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-fields">
+        <div className="dashboard-hub-db-field">
           <label>{t("dashboard.baseCreateNew")}</label>
-          <div className="llm-hub-db-base-create-row">
+          <div className="dashboard-hub-db-base-create-row">
             <input
               type="text"
               value={newName}
@@ -445,14 +445,14 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
               }}
               placeholder="New Base"
             />
-            <button type="button" className="llm-hub-db-ai-btn" onClick={() => void createNewBase()} disabled={creating}>
+            <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => void createNewBase()} disabled={creating}>
               <Plus size={13} />
               {t("dashboard.baseCreate")}
             </button>
           </div>
         </div>
 
-        <div className="llm-hub-db-field">
+        <div className="dashboard-hub-db-field">
           <label>{t("dashboard.baseImportExisting")}</label>
           <FilePicker
             value=""
@@ -463,8 +463,8 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
           />
         </div>
 
-        {plugin.hasCapability("base-generation") && <div className="llm-hub-db-ai-actions">
-          <button type="button" className="llm-hub-db-ai-btn" onClick={() => openAi("create")}>
+        {plugin.hasCapability("base-generation") && <div className="dashboard-hub-db-ai-actions">
+          <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => openAi("create")}>
             <Sparkles size={13} />
             {t("dashboard.aiBaseCreate")}
           </button>
@@ -475,27 +475,27 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
   }
 
   return (
-    <div className="llm-hub-db-fields">
-      <div className="llm-hub-db-base-editor-head">
-        <div className="llm-hub-db-base-file-label">
+    <div className="dashboard-hub-db-fields">
+      <div className="dashboard-hub-db-base-editor-head">
+        <div className="dashboard-hub-db-base-file-label">
           <FileText size={14} />
           <span>{cfg.base}</span>
         </div>
-        <span className="llm-hub-db-base-save-state">{saving ? t("dashboard.saving") : t("dashboard.saved")}</span>
+        <span className="dashboard-hub-db-base-save-state">{saving ? t("dashboard.saving") : t("dashboard.saved")}</span>
       </div>
 
-      <div className="llm-hub-db-ai-actions">
-        {plugin.hasCapability("base-generation") && <button type="button" className="llm-hub-db-ai-btn" onClick={() => openAi("modify")}>
+      <div className="dashboard-hub-db-ai-actions">
+        {plugin.hasCapability("base-generation") && <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => openAi("modify")}>
           <Sparkles size={13} />
           {t("dashboard.aiBaseEdit")}
         </button>}
-        <button type="button" className="llm-hub-db-ai-btn" onClick={() => updateWidgetConfig({ base: "" })}>
+        <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => updateWidgetConfig({ base: "" })}>
           <Pencil size={13} />
           {t("dashboard.baseChangeFile")}
         </button>
       </div>
 
-      {loadError && <p className="llm-hub-db-error">{loadError}</p>}
+      {loadError && <p className="dashboard-hub-db-error">{loadError}</p>}
 
       {baseConfig && activeView ? (
         <ManualBaseEditor
@@ -518,7 +518,7 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
           }}
         />
       ) : (
-        !loadError && <div className="llm-hub-db-empty-hint">{t("dashboard.baseNoViews")}</div>
+        !loadError && <div className="dashboard-hub-db-empty-hint">{t("dashboard.baseNoViews")}</div>
       )}
     </div>
   );
@@ -565,7 +565,7 @@ function ManualBaseEditor({
 
   return (
     <>
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseViewName")}</label>
         <input
           type="text"
@@ -574,7 +574,7 @@ function ManualBaseEditor({
         />
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseViewType")}</label>
         <select value={viewType} onChange={(e) => onUpdateView({ type: e.target.value })}>
           <option value="table">Table</option>
@@ -583,7 +583,7 @@ function ManualBaseEditor({
         </select>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{viewType === "table" ? t("dashboard.baseColumns") : t("dashboard.baseProperties")}</label>
         <BaseFieldsEditor
           order={order}
@@ -600,7 +600,7 @@ function ManualBaseEditor({
       )}
 
       {viewType === "list" && (
-        <label className="llm-hub-db-kanban-checkbox">
+        <label className="dashboard-hub-db-kanban-checkbox">
           <input
             type="checkbox"
             checked={activeView.indentProperties === true}
@@ -610,9 +610,9 @@ function ManualBaseEditor({
         </label>
       )}
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseSort")}</label>
-        <div className="llm-hub-db-base-sort-row">
+        <div className="dashboard-hub-db-base-sort-row">
           <select
             value={sort?.property ?? ""}
             onChange={(e) => onUpdateView({ sort: e.target.value ? [{ property: e.target.value, direction: sort?.direction ?? "ASC" }] : undefined })}
@@ -631,7 +631,7 @@ function ManualBaseEditor({
         </div>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseLimit")}</label>
         <input
           type="number"
@@ -645,7 +645,7 @@ function ManualBaseEditor({
         />
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseFilters")}</label>
         <BaseFilterEditor
           filters={activeView.filters}
@@ -656,7 +656,7 @@ function ManualBaseEditor({
         />
       </div>
 
-      <details className="llm-hub-db-base-raw">
+      <details className="dashboard-hub-db-base-raw">
         <summary>{t("dashboard.baseRawYaml")}</summary>
         <textarea value={baseContent} onChange={(e) => onRawChange(e.target.value)} rows={8} />
       </details>
@@ -693,11 +693,11 @@ function BaseFieldsEditor({
 
   return (
     <>
-      {order.length === 0 && <p className="llm-hub-db-hint">{t("dashboard.baseFieldsAuto")}</p>}
-      <div className="llm-hub-db-base-fields-list">
+      {order.length === 0 && <p className="dashboard-hub-db-hint">{t("dashboard.baseFieldsAuto")}</p>}
+      <div className="dashboard-hub-db-base-fields-list">
         {order.map((field, index) => (
           <div
-            className={`llm-hub-db-base-field-row${dragOverIndex === index ? " is-drag-over" : ""}`}
+            className={`dashboard-hub-db-base-field-row${dragOverIndex === index ? " is-drag-over" : ""}`}
             draggable
             key={field}
             onDragStart={() => {
@@ -714,7 +714,7 @@ function BaseFieldsEditor({
               setDragOverIndex(null);
             }}
           >
-            <GripVertical size={12} className="llm-hub-db-base-grip" />
+            <GripVertical size={12} className="dashboard-hub-db-base-grip" />
             <span title={field}>{field}</span>
             {allowAlias && (
               <input
@@ -724,7 +724,7 @@ function BaseFieldsEditor({
                 onChange={(e) => onAliasChange(field, e.target.value)}
               />
             )}
-            <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => onOrderChange(order.filter((_, i) => i !== index))} title={t("dashboard.remove")}>
+            <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => onOrderChange(order.filter((_, i) => i !== index))} title={t("dashboard.remove")}>
               <X size={12} />
             </button>
           </div>
@@ -761,22 +761,22 @@ function BaseCardOptions({
   const cardSize = typeof view.cardSize === "string" ? view.cardSize : "medium";
 
   return (
-    <div className="llm-hub-db-base-card-options">
-      <div className="llm-hub-db-field">
+    <div className="dashboard-hub-db-base-card-options">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseCardImage")}</label>
         <select value={imageProp} onChange={(e) => onUpdateView({ image: e.target.value || undefined })}>
           <option value="">{t("dashboard.baseImageNone")}</option>
           {fieldNames.map((field) => <option key={field} value={field}>{field}</option>)}
         </select>
       </div>
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseCardImageFit")}</label>
         <select value={imageFit} onChange={(e) => onUpdateView({ imageFit: e.target.value })}>
           <option value="cover">Cover</option>
           <option value="contain">Contain</option>
         </select>
       </div>
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseCardImageRatio")}</label>
         <select value={imageAspectRatio} onChange={(e) => onUpdateView({ imageAspectRatio: e.target.value })}>
           <option value="16 / 9">16:9</option>
@@ -785,7 +785,7 @@ function BaseCardOptions({
           <option value="3 / 2">3:2</option>
         </select>
       </div>
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.baseCardSize")}</label>
         <select value={cardSize} onChange={(e) => onUpdateView({ cardSize: e.target.value })}>
           <option value="small">Small</option>
@@ -866,16 +866,16 @@ function BaseFilterEditor({
 
   if (!representable) {
     return (
-      <p className="llm-hub-db-hint llm-hub-db-base-filter-advanced">
+      <p className="dashboard-hub-db-hint dashboard-hub-db-base-filter-advanced">
         {t("dashboard.baseAdvancedFilters")}
       </p>
     );
   }
 
   return (
-    <div className="llm-hub-db-base-filter">
-      <div className="llm-hub-db-base-filter-head">
-        {terms.length === 0 && <p className="llm-hub-db-hint">{t("dashboard.noFilters")}</p>}
+    <div className="dashboard-hub-db-base-filter">
+      <div className="dashboard-hub-db-base-filter-head">
+        {terms.length === 0 && <p className="dashboard-hub-db-hint">{t("dashboard.noFilters")}</p>}
         {terms.length >= 2 && (
           <select value={combinator} onChange={(e) => commit(e.target.value as Combinator, terms)}>
             <option value="and">{t("dashboard.baseFilterAnd")}</option>
@@ -883,13 +883,13 @@ function BaseFilterEditor({
           </select>
         )}
       </div>
-      <div className="llm-hub-db-base-filter-terms">
+      <div className="dashboard-hub-db-base-filter-terms">
         {terms.map((term, index) => {
           if (term.kind === "raw") {
             return (
-              <div className="llm-hub-db-base-filter-row is-raw" key={index}>
+              <div className="dashboard-hub-db-base-filter-row is-raw" key={index}>
                 <span title={rawNodeToText(term.node)}>{rawNodeToText(term.node)}</span>
-                <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
+                <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
                   <X size={12} />
                 </button>
               </div>
@@ -898,14 +898,14 @@ function BaseFilterEditor({
           if (term.kind === "inFolder") {
             const missing = term.value && !folderOptions.includes(term.value);
             return (
-              <div className="llm-hub-db-base-filter-row is-short" key={index}>
+              <div className="dashboard-hub-db-base-filter-row is-short" key={index}>
                 {fieldSelect(index, term, INFOLDER_KEY)}
                 <select value={term.value} onChange={(e) => setTerm(index, { ...term, value: e.target.value })}>
                   <option value="">{t("dashboard.baseFilterSelectFolder")}</option>
                   {missing && <option value={term.value}>{term.value}</option>}
                   {folderOptions.map((folder) => <option key={folder} value={folder}>{folder}</option>)}
                 </select>
-                <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
+                <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
                   <X size={12} />
                 </button>
               </div>
@@ -913,10 +913,10 @@ function BaseFilterEditor({
           }
           if (term.kind === "hasTag") {
             return (
-              <div className="llm-hub-db-base-filter-row is-short" key={index}>
+              <div className="dashboard-hub-db-base-filter-row is-short" key={index}>
                 {fieldSelect(index, term, HASTAG_KEY)}
                 <input value={term.value} placeholder="#tag" onChange={(e) => setTerm(index, { ...term, value: e.target.value })} />
-                <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
+                <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
                   <X size={12} />
                 </button>
               </div>
@@ -926,22 +926,22 @@ function BaseFilterEditor({
           const type = fieldTypeMap.get(cond.property) ?? "string";
           const needsValue = !VALUELESS_OPS.has(cond.op);
           return (
-            <div className={`llm-hub-db-base-filter-row${type === "date" && needsValue ? " is-date" : ""}`} key={index}>
-              <div className="llm-hub-db-base-filter-property">{fieldSelect(index, term, cond.property)}</div>
-              <select className="llm-hub-db-base-filter-operator" value={cond.op} onChange={(e) => setTerm(index, { kind: "cmp", cond: { ...cond, op: e.target.value as FilterOp } })}>
+            <div className={`dashboard-hub-db-base-filter-row${type === "date" && needsValue ? " is-date" : ""}`} key={index}>
+              <div className="dashboard-hub-db-base-filter-property">{fieldSelect(index, term, cond.property)}</div>
+              <select className="dashboard-hub-db-base-filter-operator" value={cond.op} onChange={(e) => setTerm(index, { kind: "cmp", cond: { ...cond, op: e.target.value as FilterOp } })}>
                 {(OPERATORS_BY_TYPE[type] ?? OPERATORS_BY_TYPE.string).map((op) => (
                   <option key={op} value={op}>{operatorLabel(op)}</option>
                 ))}
               </select>
               {needsValue && type === "date" ? (
-                <div className="llm-hub-db-base-filter-value">
+                <div className="dashboard-hub-db-base-filter-value">
                   <RelativeDateInput
                     value={cond.value}
                     onChange={(value) => setTerm(index, { kind: "cmp", cond: { ...cond, value } })}
                   />
                 </div>
               ) : needsValue ? (
-                <div className="llm-hub-db-base-filter-value">
+                <div className="dashboard-hub-db-base-filter-value">
                   <input
                     type={type === "number" ? "number" : "text"}
                     value={inputValueString(cond.value)}
@@ -952,14 +952,14 @@ function BaseFilterEditor({
                   />
                 </div>
               ) : null}
-              <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
+              <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => removeTerm(index)} title={t("dashboard.remove")}>
                 <X size={12} />
               </button>
             </div>
           );
         })}
       </div>
-      <button type="button" className="llm-hub-db-base-add-filter" onClick={addTerm}>
+      <button type="button" className="dashboard-hub-db-base-add-filter" onClick={addTerm}>
         <Plus size={12} />
         {t("dashboard.addFilter")}
       </button>
@@ -981,7 +981,7 @@ function RelativeDateInput({
     else if (next === "relative") onChange({ kind: "relative-date", amount: relative?.amount || 1, unit: relative?.unit ?? "day", direction: relative?.direction ?? "future" });
     else onChange("");
   };
-  return <div className={`llm-hub-db-base-date-value is-${mode}`}>
+  return <div className={`dashboard-hub-db-base-date-value is-${mode}`}>
     <select value={mode} onChange={(event) => setMode(event.target.value)}>
       <option value="absolute">{t("dashboard.baseDateAbsolute")}</option>
       <option value="today">{t("dashboard.baseDateToday")}</option>

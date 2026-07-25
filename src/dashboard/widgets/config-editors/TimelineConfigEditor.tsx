@@ -24,8 +24,8 @@ export function TimelineConfigEditor({ config, onChange, plugin }: ConfigEditorP
   const update = (patch: Partial<TimelineConfig>) => onChange({ ...cfg, ...patch });
 
   return (
-    <div className="llm-hub-db-fields">
-      <div className="llm-hub-db-field">
+    <div className="dashboard-hub-db-fields">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.timelineName")}</label>
         <input
           type="text"
@@ -33,10 +33,10 @@ export function TimelineConfigEditor({ config, onChange, plugin }: ConfigEditorP
           onChange={(e) => update({ name: sanitizeName(e.target.value) })}
           placeholder="Timeline"
         />
-        <p className="llm-hub-db-hint">{t("dashboard.timelineStorageHint").replace("Dashboards", plugin.settings.baseDirectory)}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.timelineStorageHint").replace("Dashboards", plugin.settings.baseDirectory)}</p>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.timelineLatestCount")}</label>
         <input
           type="number"
@@ -50,7 +50,7 @@ export function TimelineConfigEditor({ config, onChange, plugin }: ConfigEditorP
         />
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.timelineCollapseLines")}</label>
         <input
           type="number"
@@ -64,7 +64,7 @@ export function TimelineConfigEditor({ config, onChange, plugin }: ConfigEditorP
         />
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.timelineCollapseChars")}</label>
         <input
           type="number"

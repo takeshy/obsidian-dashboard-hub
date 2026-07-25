@@ -6,6 +6,7 @@ import { FilePicker } from "./FilePicker";
 interface FileConfig {
   path?: string;
   showHeader?: boolean;
+  allowScripts?: boolean;
 }
 
 export const SUPPORTED_FILE_EXTENSIONS = new Set([
@@ -39,6 +40,7 @@ export function FileConfigEditor({ config, onChange, app }: ConfigEditorProps) {
   const cfg = (config ?? {}) as FileConfig;
   const path = cfg.path ?? "";
   const showHeader = cfg.showHeader !== false;
+  const isHtml = path.toLowerCase().endsWith(".html");
 
   const files = useMemo(
     () =>
@@ -51,8 +53,8 @@ export function FileConfigEditor({ config, onChange, app }: ConfigEditorProps) {
   );
 
   return (
-    <div className="llm-hub-db-fields">
-      <div className="llm-hub-db-field">
+    <div className="dashboard-hub-db-fields">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.fileSelectFile")}</label>
         <FilePicker
           value={path}
@@ -62,7 +64,7 @@ export function FileConfigEditor({ config, onChange, app }: ConfigEditorProps) {
           searchPlaceholder={t("dashboard.searchPlaceholder")}
         />
       </div>
-      <label className="llm-hub-db-checkrow">
+      <label className="dashboard-hub-db-checkrow">
         <input
           type="checkbox"
           checked={showHeader}
@@ -70,6 +72,19 @@ export function FileConfigEditor({ config, onChange, app }: ConfigEditorProps) {
         />
         <span>{t("dashboard.showHeader")}</span>
       </label>
+      {isHtml && <>
+        <label className="dashboard-hub-db-checkrow">
+          <input
+            type="checkbox"
+            checked={cfg.allowScripts === true}
+            onChange={(e) => onChange({ ...cfg, allowScripts: e.currentTarget.checked })}
+          />
+          <span>{t("dashboard.fileAllowJavaScript")}</span>
+        </label>
+        {cfg.allowScripts === true && (
+          <p className="dashboard-hub-db-hint" role="note">{t("dashboard.fileAllowJavaScriptWarning")}</p>
+        )}
+      </>}
     </div>
   );
 }

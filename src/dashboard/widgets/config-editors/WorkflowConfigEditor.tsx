@@ -156,15 +156,15 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
   }, [app, cfg, onChange, output, plugin, runAndCache]);
 
   return (
-    <div className="llm-hub-db-fields">
-      <div className="llm-hub-db-field">
+    <div className="dashboard-hub-db-fields">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.outputFormat")}</label>
-        <div className="llm-hub-db-toggle">
+        <div className="dashboard-hub-db-toggle">
           {OUTPUTS.map((o) => (
             <button
               key={o.value}
               type="button"
-              className={`llm-hub-db-toggle-btn${output === o.value ? " is-active" : ""}`}
+              className={`dashboard-hub-db-toggle-btn${output === o.value ? " is-active" : ""}`}
               onClick={() => update({ output: o.value })}
             >
               {t(o.labelKey)}
@@ -173,7 +173,7 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
         </div>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.sourceWorkflow")}</label>
         <FilePicker
           value={cfg.workflow ?? ""}
@@ -182,15 +182,15 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
           placeholder={t("dashboard.selectWorkflow")}
           searchPlaceholder={t("dashboard.searchPlaceholder")}
         />
-        {plugin.hasCapability("workflow-generation") && <div className="llm-hub-db-ai-actions">
-          <button type="button" className="llm-hub-db-ai-btn" onClick={() => void openAi()}>
+        {plugin.hasCapability("workflow-generation") && <div className="dashboard-hub-db-ai-actions">
+          <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => void openAi()}>
             {cfg.workflow ? <Pencil size={13} /> : <Sparkles size={13} />}
             {cfg.workflow ? t("dashboard.aiWorkflowEdit") : t("dashboard.aiWorkflowCreate")}
           </button>
         </div>}
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.outputVariable")}</label>
         <input
           type="text"
@@ -198,14 +198,14 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
           onChange={(e) => update({ outputVariable: e.target.value || undefined })}
           placeholder={t("dashboard.outputVariablePlaceholder")}
         />
-        <p className="llm-hub-db-hint">{t("dashboard.outputStringHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.outputStringHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
-        <div className="llm-hub-db-ai-actions">
+      <div className="dashboard-hub-db-field">
+        <div className="dashboard-hub-db-ai-actions">
           <button
             type="button"
-            className="llm-hub-db-ai-btn"
+            className="dashboard-hub-db-ai-btn"
             onClick={() => void handleTestRun()}
             disabled={!workflowAvailable || testing || !cfg.workflow}
           >
@@ -215,7 +215,7 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
           {testing && (
             <button
               type="button"
-              className="llm-hub-db-ai-btn"
+              className="dashboard-hub-db-ai-btn"
               onClick={() => {
                 abortRef.current?.abort();
                 abortRef.current = null;
@@ -227,21 +227,21 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
             </button>
           )}
         </div>
-        {!workflowAvailable && <p className="llm-hub-db-hint">Connect an AI Hub plugin to run workflows.</p>}
+        {!workflowAvailable && <p className="dashboard-hub-db-hint">Connect an AI Hub plugin to run workflows.</p>}
         {result?.status === "ok" && (
-          <div className="llm-hub-db-test-ok">
+          <div className="dashboard-hub-db-test-ok">
             <CheckCircle size={12} /> {t("dashboard.testRunSuccess")}
             <pre>{result.text.slice(0, 300)}</pre>
           </div>
         )}
         {result?.status === "error" && (
-          <div className="llm-hub-db-test-err">
+          <div className="dashboard-hub-db-test-err">
             <AlertCircle size={12} /> {result.error}
           </div>
         )}
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.refreshInterval")}</label>
         <input
           type="number"
@@ -253,7 +253,7 @@ export function WorkflowConfigEditor({ config, onChange, app, plugin, widgetId, 
             update({ refreshInterval: Number.isFinite(n) && n > 0 ? n : 0 });
           }}
         />
-        <p className="llm-hub-db-hint">{t("dashboard.refreshIntervalHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.refreshIntervalHint")}</p>
       </div>
     </div>
   );

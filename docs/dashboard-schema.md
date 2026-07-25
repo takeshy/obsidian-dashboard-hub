@@ -16,6 +16,8 @@ The dashboard stores widget definitions and responsive layout. Widget content is
 
 The default Base directory is `Dashboards/` and can be changed in Dashboard Hub settings. The paths below are relative to that directory. Changing the setting does not move existing files.
 
+Automatic memo, Kanban, and Calendar activity is collected in one syslog-style Timeline. Its global name defaults to `Timeline` and can be changed in Dashboard Hub settings.
+
 - New dashboards are created directly under the Base directory.
 - AI-created backing `.base` files are stored under `<Base directory>/Bases/`.
 - Reading memos are stored under `<Base directory>/Memos/`.
@@ -45,15 +47,15 @@ Alignment updates only the `lg` layout and removes explicit `sm` layout so mobil
 
 Base widgets reference a `.base` path and use its first view. They can create or edit `.base` files and show table, cards, or list views through Obsidian's native Bases UI.
 
-File widgets reference a vault file path and optional header setting, plus persisted memo panel state (`memoPanelOpen`, `memoPanelCollapsed`). They render Markdown, text, HTML, images, PDFs, EPUBs, or a fallback open button.
+File widgets reference a vault file path and optional header setting, plus persisted memo panel state (`memoPanelOpen`, `memoPanelCollapsed`). Memo create, update, and delete activity is appended to the plugin's single configured activity Timeline. They render Markdown, text, HTML, images, PDFs, EPUBs, or a fallback open button.
 
 Web widgets store a URL and optional header setting. Some sites cannot be embedded because of frame-blocking headers.
 
-Kanban definitions store tag and folder filters, status property, title property, columns, displayed frontmatter fields, unmatched-column behavior, and an optional linked Timeline name (`timelineName`). Per-widget manual card order stays in the `.dashboard` file. When `timelineName` is non-empty, card moves append status-change posts to that Timeline.
+Kanban definitions store tag and folder filters, status property, title property, columns, displayed frontmatter fields, and unmatched-column behavior. Per-widget manual card order stays in the `.dashboard` file. Card moves append status-change posts to the plugin's configured activity Timeline.
 
 Timeline widgets store a timeline name, latest post count, and collapse line/character limits (`name`, `latestCount`, `collapseLineLimit`, `collapseCharLimit`). Feed filters are transient UI state and are not stored. Posts are `---`-separated blocks inside per-day Markdown files.
 
-Calendar widgets store a Timeline name (`timelineName`). Calendar events are Timeline post blocks containing `<!-- calendar-event: YYYY-MM-DD -->`; changing an event date moves its block between per-day files. Files should be presented with a Base widget rather than Calendar.
+Calendar widgets store a Timeline name (`timelineName`). Calendar events are Timeline post blocks containing `<!-- calendar-event: YYYY-MM-DD -->`; they remain in the scheduled day's file, while the block timestamp records when they were added. Changing an event date moves its block between per-day files. Files should be presented with a Base widget rather than Calendar.
 
 MemoList widgets index dashboard memo files and open selected memos inside the widget.
 

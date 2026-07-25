@@ -21,14 +21,14 @@ export class KanbanCardModal extends Modal {
 
   onOpen(): void {
     const { contentEl, modalEl } = this;
-    modalEl.addClass("llm-hub-db-kanban-card-modal");
+    modalEl.addClass("dashboard-hub-db-kanban-card-modal");
 
-    const header = contentEl.createDiv({ cls: "llm-hub-db-kanban-card-modal-header" });
+    const header = contentEl.createDiv({ cls: "dashboard-hub-db-kanban-card-modal-header" });
     header.createEl("h3", {
       text: this.title,
-      cls: "llm-hub-db-kanban-card-modal-title",
+      cls: "dashboard-hub-db-kanban-card-modal-title",
     });
-    const openBtn = header.createEl("button", { cls: "llm-hub-db-kanban-card-modal-open" });
+    const openBtn = header.createEl("button", { cls: "dashboard-hub-db-kanban-card-modal-open" });
     setIcon(openBtn, "lucide-external-link");
     openBtn.setAttribute("aria-label", t("dashboard.kanbanOpenNote"));
     openBtn.addEventListener("click", () => {
@@ -36,7 +36,7 @@ export class KanbanCardModal extends Modal {
       this.onOpenNote();
     });
     const body = contentEl.createDiv({
-      cls: "llm-hub-db-kanban-card-modal-body markdown-rendered",
+      cls: "dashboard-hub-db-kanban-card-modal-body markdown-rendered",
     });
     this.component.load();
     void this.app.vault.cachedRead(this.file).then((content) => {

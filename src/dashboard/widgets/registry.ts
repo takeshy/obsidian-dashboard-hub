@@ -118,7 +118,6 @@ export function registerCoreWidgets(): void {
       folder: "",
       statusProperty: "status",
       titleProperty: "",
-      timelineName: "Timeline",
       columns: [
         { value: "todo", label: "To Do" },
         { value: "in-progress", label: "In Progress" },

@@ -213,7 +213,7 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
         const viewport = firstPage.getViewport({ scale });
         for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
           const wrapper = host.createDiv({
-            cls: "llm-hub-db-pdf-page",
+            cls: "dashboard-hub-db-pdf-page",
             attr: { "data-pdf-page": String(pageNumber) },
           });
           wrapper.setCssProps({
@@ -221,7 +221,7 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
             height: `${Math.floor(viewport.height)}px`,
           });
           const canvas = wrapper.createEl("canvas");
-          const textLayer = wrapper.createDiv({ cls: "llm-hub-db-pdf-text-layer" });
+          const textLayer = wrapper.createDiv({ cls: "dashboard-hub-db-pdf-text-layer" });
           pagesRef.current.set(pageNumber, {
             page: pageNumber === 1 ? firstPage : null,
             wrapper,
@@ -340,9 +340,9 @@ const PdfFileViewer = forwardRef<PdfFileViewerHandle, {
   };
 
   return (
-    <div className="llm-hub-db-pdf-shell">
-      <div ref={hostRef} className="llm-hub-db-pdf-pages" onContextMenu={handleContextMenu} />
-      {error && <div className="llm-hub-db-pdf-error">{error}</div>}
+    <div className="dashboard-hub-db-pdf-shell">
+      <div ref={hostRef} className="dashboard-hub-db-pdf-pages" onContextMenu={handleContextMenu} />
+      {error && <div className="dashboard-hub-db-pdf-error">{error}</div>}
     </div>
   );
 });

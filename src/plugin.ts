@@ -9,6 +9,7 @@ import {
   type SettingDefinitionItem,
 } from "obsidian";
 import { initLocale } from "src/i18n";
+import { cryptoCache } from "src/core/cryptoCache";
 import { DashboardView, DASHBOARD_VIEW_TYPE } from "src/ui/DashboardView";
 import { KanbanView, KANBAN_VIEW_TYPE } from "src/ui/KanbanView";
 import { ToolLauncherModal, type LauncherTool } from "src/ui/ToolLauncherModal";
@@ -20,6 +21,7 @@ import {
 } from "src/dashboard/dashboardFile";
 import { DASHBOARD_FOLDER, normalizeBaseDirectory } from "src/dashboard/types";
 import { registerCoreWidgets } from "src/dashboard/widgets/registry";
+import { sanitizeTimelineName } from "src/dashboard/timelineEvents";
 import {
   dashboardIntegrationContractErrors,
   shouldUnregisterDashboardIntegration,
@@ -35,6 +37,7 @@ import {
 
 export interface DashboardHubSettings {
   baseDirectory: string;
+  activityTimelineName: string;
   preferredIntegrationId: string;
   preferredModels: Record<string, string>;
 }
@@ -93,6 +96,7 @@ export type DashboardCapability = "chat" | "workflow" | "base-generation" | "tex
 
 const DEFAULT_SETTINGS: DashboardHubSettings = {
   baseDirectory: DASHBOARD_FOLDER,
+  activityTimelineName: "Timeline",
   preferredIntegrationId: "",
   preferredModels: {},
 };
@@ -150,6 +154,7 @@ export class DashboardHubPlugin extends Plugin {
   }
 
   onunload(): void {
+    cryptoCache.clear();
     const workspace = this.app.workspace as unknown as { trigger: (name: string, value: unknown) => void };
     workspace.trigger(UNREGISTER_RUNTIME_SKILL_EVENT, { ownerId: DASHBOARD_SKILL.ownerId, id: DASHBOARD_SKILL.id });
     this.integrations.clear();
@@ -162,6 +167,7 @@ export class DashboardHubPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...current,
       baseDirectory: normalizeBaseDirectory(current.baseDirectory),
+      activityTimelineName: sanitizeTimelineName(current.activityTimelineName ?? "Timeline"),
       preferredModels: { ...DEFAULT_SETTINGS.preferredModels, ...(current.preferredModels ?? {}) },
     };
     // Secret files carry their own encrypted private key and salt. Remove the
@@ -179,6 +185,12 @@ export class DashboardHubPlugin extends Plugin {
     this.publishDashboardSkill();
     const workspace = this.app.workspace as unknown as { trigger: (name: string) => void };
     workspace.trigger("dashboard-hub:base-directory-changed");
+  }
+
+  async setActivityTimelineName(value: string): Promise<void> {
+    this.settings.activityTimelineName = sanitizeTimelineName(value);
+    await this.saveSettings();
+    this.publishDashboardSkill();
   }
 
   registerIntegration(integration: DashboardAiIntegration): () => void {
@@ -339,11 +351,15 @@ export class DashboardHubPlugin extends Plugin {
 
   private publishDashboardSkill(): void {
     const workspace = this.app.workspace as unknown as { trigger: (name: string, value: unknown) => void };
-    workspace.trigger(REGISTER_RUNTIME_SKILL_EVENT, dashboardSkillForBaseDirectory(this.settings.baseDirectory));
+    workspace.trigger(REGISTER_RUNTIME_SKILL_EVENT, dashboardSkillForBaseDirectory(
+      this.settings.baseDirectory,
+      this.settings.activityTimelineName,
+    ));
   }
 }
 
 /** Compatibility name used by the dashboard components while they are shared. */
+/** @deprecated Use DashboardHubPlugin. Kept for source compatibility. */
 export type LlmHubPlugin = DashboardHubPlugin;
 
 class DashboardHubSettingTab extends PluginSettingTab {
@@ -351,7 +367,7 @@ class DashboardHubSettingTab extends PluginSettingTab {
     super(app, dashboardPlugin);
   }
 
-  getSettingDefinitions(): SettingDefinitionItem<"baseDirectory">[] {
+  getSettingDefinitions(): SettingDefinitionItem<"baseDirectory" | "activityTimelineName">[] {
     return [{
       name: "Base directory",
       desc: "Root folder for dashboards and their bases, kanbans, memos, timelines, and cached data. Changing it does not move existing files.",
@@ -361,16 +377,29 @@ class DashboardHubSettingTab extends PluginSettingTab {
         defaultValue: DASHBOARD_FOLDER,
         placeholder: DASHBOARD_FOLDER,
       },
+    }, {
+      name: "Activity Timeline name",
+      desc: "Single Timeline that receives automatic memo, Kanban, and Calendar activity.",
+      control: {
+        type: "text",
+        key: "activityTimelineName",
+        defaultValue: "Timeline",
+        placeholder: "Timeline",
+      },
     }];
   }
 
   getControlValue(key: string): unknown {
-    return key === "baseDirectory" ? this.dashboardPlugin.settings.baseDirectory : undefined;
+    if (key === "baseDirectory") return this.dashboardPlugin.settings.baseDirectory;
+    if (key === "activityTimelineName") return this.dashboardPlugin.settings.activityTimelineName;
+    return undefined;
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
     if (key === "baseDirectory" && typeof value === "string") {
       await this.dashboardPlugin.setBaseDirectory(value);
+    } else if (key === "activityTimelineName" && typeof value === "string") {
+      await this.dashboardPlugin.setActivityTimelineName(value);
     }
   }
 
@@ -385,6 +414,18 @@ class DashboardHubSettingTab extends PluginSettingTab {
           .setValue(this.dashboardPlugin.settings.baseDirectory)
           .onChange(async (value) => {
             await this.dashboardPlugin.setBaseDirectory(value);
+          });
+      });
+
+    new Setting(this.containerEl)
+      .setName("Activity Timeline name")
+      .setDesc("Single Timeline that receives automatic memo, Kanban, and Calendar activity.")
+      .addText((textInput) => {
+        textInput
+          .setPlaceholder("Timeline")
+          .setValue(this.dashboardPlugin.settings.activityTimelineName)
+          .onChange(async (value) => {
+            await this.dashboardPlugin.setActivityTimelineName(value);
           });
       });
 

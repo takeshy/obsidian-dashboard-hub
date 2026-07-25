@@ -174,7 +174,7 @@ export default function GridCell({
   const handleChromePointerMove = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     const dragging = chromeDragRef.current;
     if (!dragging || dragging.pointerId !== event.pointerId) return;
-    const cellRect = event.currentTarget.closest(".llm-hub-db-cell")?.getBoundingClientRect();
+    const cellRect = event.currentTarget.closest(".dashboard-hub-db-cell")?.getBoundingClientRect();
     const chromeRect = event.currentTarget.parentElement?.getBoundingClientRect();
     if (!cellRect || !chromeRect) return;
     const maxX = Math.max(0, (cellRect.width - chromeRect.width) / 2);
@@ -203,7 +203,7 @@ export default function GridCell({
       {/* Snap preview outline (shown during drag/resize) */}
       {snapPreview && cellW > 0 && cellH > 0 && (
         <div
-          className="llm-hub-db-snap"
+          className="dashboard-hub-db-snap"
           style={{
             left: snapPreview.x * (cellW + grid.gap),
             top: snapPreview.y * (cellH + grid.gap),
@@ -214,7 +214,7 @@ export default function GridCell({
       )}
 
       <div
-        className={`llm-hub-db-cell${editMode ? " is-edit" : ""}${isActive ? " is-active" : ""}${isMaximized ? " is-maximized" : ""}`}
+        className={`dashboard-hub-db-cell${editMode ? " is-edit" : ""}${isActive ? " is-active" : ""}${isMaximized ? " is-maximized" : ""}`}
         data-widget-type={widget.type}
         style={isMaximized ? undefined : {
           gridColumn: `${pos.x + 1} / span ${pos.w}`,
@@ -225,17 +225,17 @@ export default function GridCell({
           touchAction: interactionMode ? "none" : undefined,
         }}
       >
-        <div className="llm-hub-db-cell-content">
+        <div className="dashboard-hub-db-cell-content">
           <WidgetRenderer widget={widget} ctx={ctx} />
         </div>
 
         <div
-          className="llm-hub-db-floating-menu"
+          className="dashboard-hub-db-floating-menu"
           style={{ transform: `translateX(-50%) translate(${chromeOffset.x}px, ${chromeOffset.y}px)` }}
         >
           <button
             type="button"
-            className="llm-hub-db-floating-menu-mover"
+            className="dashboard-hub-db-floating-menu-mover"
             onPointerDown={handleChromePointerDown}
             onPointerMove={handleChromePointerMove}
             onPointerUp={finishChromeDrag}
@@ -244,7 +244,7 @@ export default function GridCell({
           >
             <GripVertical size={10} />
           </button>
-          <div className="llm-hub-db-floating-menu-tools">
+          <div className="dashboard-hub-db-floating-menu-tools">
             {onToggleMaximize && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
@@ -252,7 +252,7 @@ export default function GridCell({
                   e.stopPropagation();
                   onToggleMaximize();
                 }}
-                className="llm-hub-db-iconbtn"
+                className="dashboard-hub-db-iconbtn"
                 title={isMaximized ? t("dashboard.restoreWidget") : t("dashboard.maximizeWidget")}
               >
                 {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
@@ -265,7 +265,7 @@ export default function GridCell({
                   e.stopPropagation();
                   onSettings();
                 }}
-                className="llm-hub-db-iconbtn"
+                className="dashboard-hub-db-iconbtn"
                 title={t("dashboard.settings")}
               >
                 <Settings size={12} />
@@ -275,7 +275,7 @@ export default function GridCell({
               <button
                 type="button"
                 onPointerDown={handleDragPointerDown}
-                className="llm-hub-db-iconbtn llm-hub-db-widget-mover"
+                className="dashboard-hub-db-iconbtn dashboard-hub-db-widget-mover"
                 title={t("dashboard.dragToMove")}
               >
                 <GripVertical size={13} />
@@ -287,7 +287,7 @@ export default function GridCell({
         {layoutHandlesEnabled && (
           <div
             onPointerDown={handleResizePointerDown}
-            className="llm-hub-db-resize"
+            className="dashboard-hub-db-resize"
             style={{ touchAction: "none" }}
             title={t("dashboard.dragToResize")}
           >

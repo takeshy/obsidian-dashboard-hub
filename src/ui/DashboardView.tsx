@@ -1,6 +1,6 @@
 import { createRoot, Root } from "react-dom/client";
 import { TextFileView, WorkspaceLeaf, IconName } from "obsidian";
-import type { LlmHubPlugin } from "src/plugin";
+import type { DashboardHubPlugin } from "src/plugin";
 import { DashboardEditor } from "src/dashboard/DashboardEditor";
 
 export const DASHBOARD_VIEW_TYPE = "hub-dashboard-view";
@@ -11,11 +11,11 @@ export const DASHBOARD_VIEW_TYPE = "hub-dashboard-view";
  * requestSave).
  */
 export class DashboardView extends TextFileView {
-  plugin: LlmHubPlugin;
+  plugin: DashboardHubPlugin;
   reactRoot: Root | null = null;
   private currentData: string = "";
 
-  constructor(leaf: WorkspaceLeaf, plugin: LlmHubPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: DashboardHubPlugin) {
     super(leaf);
     this.plugin = plugin;
   }
@@ -64,7 +64,7 @@ export class DashboardView extends TextFileView {
 
     const container = this.contentEl;
     container.empty();
-    container.addClass("llm-hub-dashboard-container");
+    container.addClass("dashboard-hub-dashboard-container");
 
     const root = createRoot(container);
     root.render(

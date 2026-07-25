@@ -12,7 +12,6 @@ export interface KanbanBoardDefinition {
   columns?: Array<{ value: string; label: string }>;
   showUnspecified?: boolean;
   displayFields?: Array<string | { field: string; label?: string; maxLength?: number }>;
-  timelineName?: string;
   [key: string]: unknown;
 }
 

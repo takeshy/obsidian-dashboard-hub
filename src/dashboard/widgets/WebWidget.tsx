@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { t } from "src/i18n";
 import type { WidgetContext } from "../types";
+import { safeWebUrl } from "./webUrl";
 
 interface WebConfig {
   url?: string;
@@ -14,20 +15,25 @@ export default function WebWidget({
   ctx?: WidgetContext;
 }) {
   const cfg = (config ?? {}) as WebConfig;
-  const href = typeof cfg.url === "string" ? cfg.url : "";
+  const configuredUrl = typeof cfg.url === "string" ? cfg.url : "";
+  const href = safeWebUrl(configuredUrl);
   const showHeader = cfg.showHeader !== false;
 
+  if (!configuredUrl) {
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.noUrl")}</div>;
+  }
+
   if (!href) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.noUrl")}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.urlInvalid")}</div>;
   }
 
   return (
-    <div className="llm-hub-db-web-wrap">
+    <div className="dashboard-hub-db-web-wrap">
       {showHeader && (
-        <div className="llm-hub-db-web-header">
-          <span className="llm-hub-db-web-url">{href}</span>
+        <div className="dashboard-hub-db-web-header">
+          <span className="dashboard-hub-db-web-url">{href}</span>
           <a
-            className="llm-hub-db-iconbtn"
+            className="dashboard-hub-db-iconbtn"
             href={href}
             target="_blank"
             rel="noopener noreferrer"
@@ -39,7 +45,7 @@ export default function WebWidget({
         </div>
       )}
       <iframe
-        className="llm-hub-db-web"
+        className="dashboard-hub-db-web"
         src={href}
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
       />

@@ -15,7 +15,7 @@ export default function UnknownWidget({
   ctx?: WidgetContext;
 }) {
   return (
-    <div className="llm-hub-db-widget-empty">
+    <div className="dashboard-hub-db-widget-empty">
       <Puzzle size={24} />
       <span>{t("dashboard.unsupportedWidget")}: {type}</span>
     </div>

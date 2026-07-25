@@ -37,7 +37,6 @@ interface KanbanConfig {
   displayFields?: Array<string | KanbanDisplayField>;
   /** Stable card path order used for vertical ordering inside columns. */
   cardOrder?: string[];
-  timelineName?: string;
 }
 
 interface Card {
@@ -202,10 +201,6 @@ export default function KanbanWidget({
     displayFields.some((field) => field.field === "file.content");
   const columns = Array.isArray(def.columns) ? def.columns.filter((c) => c && typeof c.value === "string") : [];
   const showUnspecified = def.showUnspecified !== false;
-  // Boards created before Timeline integration have no timelineName. Link
-  // those to the standard Timeline by default; an explicit empty value still
-  // lets a user disable activity recording.
-  const timelineName = (def.timelineName ?? "Timeline").trim();
 
   const [, setTick] = useState(0);
   const rerender = useCallback(() => setTick((v) => v + 1), []);
@@ -514,15 +509,13 @@ export default function KanbanWidget({
               })
               .then(async () => {
                 flashLanded(card.path);
-                if (timelineName) {
-                  await appendTimelineEntry(
-                    ctx.app.vault,
-                    timelineName,
-                    `> [!info] Kanban · ${kanbanName}\n> [[${card.path}|${card.title}]]\n> \`${oldLabel}\` → \`${nextLabel}\``,
-                    new Date(),
-                    ctx.plugin.settings.baseDirectory,
-                  );
-                }
+                await appendTimelineEntry(
+                  ctx.app.vault,
+                  ctx.plugin.settings.activityTimelineName,
+                  `> [!info] Kanban · ${kanbanName}\n> [[${card.path}|${card.title}]]\n> \`${oldLabel}\` → \`${nextLabel}\``,
+                  new Date(),
+                  ctx.plugin.settings.baseDirectory,
+                );
               });
           }
           setDrag(null);
@@ -544,7 +537,7 @@ export default function KanbanWidget({
       activeWindow.addEventListener("pointermove", onMove);
       activeWindow.addEventListener("pointerup", onUp);
     },
-    [ctx, statusProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, timelineName, kanbanName],
+    [ctx, statusProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, kanbanName],
   );
 
   // Create a note that already matches this board's filters: dropped in the
@@ -594,9 +587,9 @@ export default function KanbanWidget({
   if (!ctx) return null;
 
   if (!statusProp) {
-    return <div className="llm-hub-db-widget-empty">{t("dashboard.kanbanNoStatusProperty")}</div>;
+    return <div className="dashboard-hub-db-widget-empty">{t("dashboard.kanbanNoStatusProperty")}</div>;
   }
-  if (fileError) return <div className="llm-hub-db-widget-empty">{t("dashboard.kanbanFileError")}</div>;
+  if (fileError) return <div className="dashboard-hub-db-widget-empty">{t("dashboard.kanbanFileError")}</div>;
 
   const renderColumn = (value: string, label: string, cardsInCol: Card[]) => (
     <div
@@ -605,33 +598,33 @@ export default function KanbanWidget({
         if (el) columnElsRef.current.set(value, el);
         else columnElsRef.current.delete(value);
       }}
-      className={`llm-hub-db-kanban-column${dropCol === value ? " is-drop-target" : ""}`}
+      className={`dashboard-hub-db-kanban-column${dropCol === value ? " is-drop-target" : ""}`}
     >
-      <div className="llm-hub-db-kanban-column-header">
+      <div className="dashboard-hub-db-kanban-column-header">
         <span>{label}</span>
-        <span className="llm-hub-db-kanban-column-count">{cardsInCol.length}</span>
+        <span className="dashboard-hub-db-kanban-column-count">{cardsInCol.length}</span>
       </div>
-      <div className="llm-hub-db-kanban-cards">
+      <div className="dashboard-hub-db-kanban-cards">
         {cardsInCol.map((card) => (
           <div
             key={card.path}
-            className={`llm-hub-db-kanban-card${drag?.card.path === card.path ? " is-dragging" : ""}${landed === card.path ? " is-landed" : ""}${dropTarget?.path === card.path && dropTarget.position === "before" ? " is-drop-before" : ""}${dropTarget?.path === card.path && dropTarget.position === "after" ? " is-drop-after" : ""}`}
+            className={`dashboard-hub-db-kanban-card${drag?.card.path === card.path ? " is-dragging" : ""}${landed === card.path ? " is-landed" : ""}${dropTarget?.path === card.path && dropTarget.position === "before" ? " is-drop-before" : ""}${dropTarget?.path === card.path && dropTarget.position === "after" ? " is-drop-after" : ""}`}
             data-kanban-card-path={card.path}
             data-kanban-column={value}
             onPointerDown={(e) => onCardPointerDown(e, card)}
             title={t("dashboard.kanbanDragToMove")}
           >
-            <div className="llm-hub-db-kanban-card-title">{card.title}</div>
+            <div className="dashboard-hub-db-kanban-card-title">{card.title}</div>
             {card.fields.map((f) => (
-              <div className="llm-hub-db-kanban-card-field" key={f.field}>
-                {f.label && <span className="llm-hub-db-kanban-card-field-name">{f.label}</span>}
-                <span className="llm-hub-db-kanban-card-field-value">{f.value}</span>
+              <div className="dashboard-hub-db-kanban-card-field" key={f.field}>
+                {f.label && <span className="dashboard-hub-db-kanban-card-field-name">{f.label}</span>}
+                <span className="dashboard-hub-db-kanban-card-field-value">{f.value}</span>
               </div>
             ))}
           </div>
         ))}
         {cardsInCol.length === 0 && (
-          <div className="llm-hub-db-kanban-column-empty" />
+          <div className="dashboard-hub-db-kanban-column-empty" />
         )}
       </div>
     </div>
@@ -642,21 +635,21 @@ export default function KanbanWidget({
     : uniqueColumns.map((c) => ({ value: c.value, label: c.label, cards: grouped.get(c.value) ?? [] }));
 
   return (
-    <div className="llm-hub-db-kanban-wrap">
-      <div className="llm-hub-db-kanban-header">
-        {boardTitle && <span className="llm-hub-db-kanban-board-title">{boardTitle}</span>}
+    <div className="dashboard-hub-db-kanban-wrap">
+      <div className="dashboard-hub-db-kanban-header">
+        {boardTitle && <span className="dashboard-hub-db-kanban-board-title">{boardTitle}</span>}
         {tagOptions.length > 0 && (
-          <div className="llm-hub-db-kanban-tag-filter">
+          <div className="dashboard-hub-db-kanban-tag-filter">
             <select value={selectedTag} onChange={(event) => setSelectedTag(event.target.value)} title={t("dashboard.kanbanTagFilter")}>
               <option value="">{t("dashboard.kanbanAllTags")}</option>
               {tagOptions.map((tag) => <option value={tag} key={tag}>#{tag}</option>)}
             </select>
-            {selectedTag && <button type="button" className="llm-hub-db-iconbtn" onClick={() => setSelectedTag("")} title={t("dashboard.kanbanClearTagFilter")}><X size={13} /></button>}
+            {selectedTag && <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => setSelectedTag("")} title={t("dashboard.kanbanClearTagFilter")}><X size={13} /></button>}
           </div>
         )}
         <button
           type="button"
-          className="llm-hub-db-kanban-new"
+          className="dashboard-hub-db-kanban-new"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
@@ -669,18 +662,18 @@ export default function KanbanWidget({
         </button>
       </div>
       {allColumns.length === 0 ? (
-        <div className="llm-hub-db-kanban-empty">{t("dashboard.kanbanEmpty")}</div>
+        <div className="dashboard-hub-db-kanban-empty">{t("dashboard.kanbanEmpty")}</div>
       ) : (
-        <div className="llm-hub-db-kanban">
+        <div className="dashboard-hub-db-kanban">
           {allColumns.map((col) => renderColumn(col.value, col.label, col.cards))}
         </div>
       )}
       {drag && (
         <div
-          className="llm-hub-db-kanban-ghost"
+          className="dashboard-hub-db-kanban-ghost"
           style={{ left: drag.x - drag.offsetX, top: drag.y - drag.offsetY }}
         >
-          <div className="llm-hub-db-kanban-card-title">{drag.card.title}</div>
+          <div className="dashboard-hub-db-kanban-card-title">{drag.card.title}</div>
         </div>
       )}
     </div>

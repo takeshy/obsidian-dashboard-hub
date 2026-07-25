@@ -20,6 +20,7 @@ function folder(path: string): TFolder {
 
 function makeVault(initial: Record<string, string> = {}) {
   const contents = new Map(Object.entries(initial));
+  const readPaths: string[] = [];
   const folders = new Set<string>();
   for (const path of contents.keys()) {
     const parts = path.split("/");
@@ -33,10 +34,10 @@ function makeVault(initial: Record<string, string> = {}) {
     getMarkdownFiles: () => [...contents.keys()].filter((path) => path.endsWith(".md")).map(file),
     createFolder: async (path: string) => { folders.add(path); },
     create: async (path: string, content: string) => { contents.set(path, content); return file(path); },
-    read: async (target: TFile) => contents.get(target.path) ?? "",
+    read: async (target: TFile) => { readPaths.push(target.path); return contents.get(target.path) ?? ""; },
     modify: async (target: TFile, content: string) => { contents.set(target.path, content); },
   } as unknown as Vault;
-  return { vault, contents };
+  return { vault, contents, readPaths };
 }
 
 describe("Timeline activity events", () => {
@@ -77,17 +78,32 @@ describe("Timeline activity events", () => {
     expect(moved).toContain("Event · 2026-07-25");
   });
 
-  it("finds activity by creation date even when an event is stored on a future date", async () => {
+  it("keeps a future event on its scheduled day instead of duplicating its registration activity", async () => {
     const { vault } = makeVault({
       "Dashboards/Timeline/Timeline/2026-07-23.md": "2026-07-23T01:00:00.000Z\nid: memo-1\n\nMemo created\n",
       "Dashboards/Timeline/Timeline/2026-07-30.md": "2026-07-23T02:00:00.000Z\nid: event-1\n\n<!-- calendar-event: 2026-07-30 -->\n> Planned review\n",
       "Dashboards/Timeline/Timeline/2026-07-24.md": "2026-07-24T01:00:00.000Z\nid: other\n\nNot today\n",
     });
 
+    const registrationDay = await readTimelineEntriesForDay(vault, "Timeline", "2026-07-23");
+    const scheduledDay = await readTimelineEntriesForDay(vault, "Timeline", "2026-07-30");
+    expect(registrationDay).toHaveLength(1);
+    expect(registrationDay.join("\n")).toContain("Memo created");
+    expect(registrationDay.join("\n")).not.toContain("Planned review");
+    expect(scheduledDay).toHaveLength(1);
+    expect(scheduledDay.join("\n")).toContain("Planned review");
+  });
+
+  it("reads only the requested day's file", async () => {
+    const { vault, readPaths } = makeVault({
+      "Dashboards/Timeline/Timeline/2026-07-23.md": "2026-07-23T01:00:00.000Z\nid: memo-1\n\nMemo created\n",
+      "Dashboards/Timeline/Timeline/2026-07-30.md": "2026-07-23T02:00:00.000Z\nid: event-1\n\n<!-- calendar-event: 2026-07-30 -->\n> Planned review\n",
+      "Dashboards/Timeline/Timeline/2020-01-01.md": "2020-01-01T01:00:00.000Z\nid: old\n\nOld activity\n",
+    });
+
     const entries = await readTimelineEntriesForDay(vault, "Timeline", "2026-07-23");
-    expect(entries).toHaveLength(2);
-    expect(entries.join("\n")).toContain("Memo created");
-    expect(entries.join("\n")).toContain("Planned review");
-    expect(entries.join("\n")).not.toContain("Not today");
+
+    expect(entries).toHaveLength(1);
+    expect(readPaths).toEqual(["Dashboards/Timeline/Timeline/2026-07-23.md"]);
   });
 });

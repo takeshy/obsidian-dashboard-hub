@@ -3,6 +3,7 @@ import { ensureVaultFolder } from "./dashboardFile";
 import { DASHBOARD_FOLDER } from "./types";
 
 const SEPARATOR_RE = /^\s*---\s*\r?\n(?=(?:<!--\s*timeline-post:|\d{4}-\d{2}-\d{2}T))/m;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function sanitizeTimelineName(value: string): string {
   return value.trim().replace(/\.md$/i, "").replace(/[\\/:*?"<>|#[\]\n\r\t]+/g, "-")
@@ -31,22 +32,17 @@ function entryCreatedAt(block: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/** Read activity by creation day, including Calendar events stored under a
- * future scheduled date. This is the canonical AI-facing Timeline query. */
+/** Read the entries stored for one Timeline day. Calendar events remain on
+ * their scheduled day; their embedded timestamp records when they were added.
+ * This is the canonical AI-facing Timeline query. */
 export async function readTimelineEntriesForDay(vault: Vault, timelineName: string, day: string, baseDirectory = DASHBOARD_FOLDER): Promise<string[]> {
+  if (!DAY_RE.test(day)) return [];
   const dir = timelineDir(timelineName, baseDirectory);
-  const prefix = `${dir}/`;
-  const files = vault.getMarkdownFiles().filter((file) =>
-    file.path.startsWith(prefix) && /^\d{4}-\d{2}-\d{2}\.md$/.test(file.path.slice(prefix.length)),
+  const file = vault.getAbstractFileByPath(`${dir}/${day}.md`);
+  if (!(file instanceof TFile)) return [];
+  return blocks(await vault.read(file)).sort((a, b) =>
+    (entryCreatedAt(a)?.getTime() ?? 0) - (entryCreatedAt(b)?.getTime() ?? 0),
   );
-  const entries: Array<{ createdAt: number; block: string }> = [];
-  for (const file of files) {
-    for (const block of blocks(await vault.read(file))) {
-      const createdAt = entryCreatedAt(block);
-      if (createdAt && dayKey(createdAt) === day) entries.push({ createdAt: createdAt.getTime(), block });
-    }
-  }
-  return entries.sort((a, b) => a.createdAt - b.createdAt).map((entry) => entry.block);
 }
 
 async function writeBlocks(vault: Vault, file: TFile, next: string[]): Promise<void> {
@@ -67,6 +63,7 @@ export async function appendTimelineEntry(vault: Vault, timelineName: string, bo
 }
 
 export async function moveCalendarEvent(vault: Vault, timelineName: string, postId: string, nextDate: string, baseDirectory = DASHBOARD_FOLDER): Promise<boolean> {
+  if (!DAY_RE.test(nextDate)) throw new Error(`Invalid Calendar event date: ${nextDate}`);
   const dir = timelineDir(timelineName, baseDirectory);
   const prefix = `${dir}/`;
   const files = vault.getMarkdownFiles().filter((file) => file.path.startsWith(prefix) && /^\d{4}-\d{2}-\d{2}\.md$/.test(file.path.slice(prefix.length)));

@@ -32,11 +32,11 @@ export class AiGenerationModal extends Modal {
   }
 
   async onOpen(): Promise<void> {
-    this.modalEl.addClass("llm-hub-db-ai-modal-host");
+    this.modalEl.addClass("dashboard-hub-db-ai-modal-host");
     this.contentEl.empty();
-    this.contentEl.addClass("llm-hub-db-ai-modal");
+    this.contentEl.addClass("dashboard-hub-db-ai-modal");
     this.contentEl.createEl("h2", { text: this.options.title });
-    this.contentEl.createEl("p", { text: this.options.description, cls: "llm-hub-db-hint" });
+    this.contentEl.createEl("p", { text: this.options.description, cls: "dashboard-hub-db-hint" });
 
     const modelSetting = new Setting(this.contentEl).setName(t("aiWorkflow.model"));
     const modelSelect = modelSetting.controlEl.createEl("select");
@@ -47,20 +47,20 @@ export class AiGenerationModal extends Modal {
     vaultCheckbox.checked = true;
     vaultCheckbox.disabled = true;
 
-    const instruction = this.contentEl.createEl("textarea", { cls: "llm-hub-db-ai-instruction" });
+    const instruction = this.contentEl.createEl("textarea", { cls: "dashboard-hub-db-ai-instruction" });
     instruction.rows = 4;
     instruction.value = this.options.initialInstruction ?? "";
     instruction.placeholder = t("dashboard.aiBaseAdditionalPlaceholder");
 
-    const diff = this.contentEl.createDiv({ cls: "llm-hub-db-ai-split" });
-    const beforeCol = diff.createDiv({ cls: "llm-hub-db-ai-split-col" });
+    const diff = this.contentEl.createDiv({ cls: "dashboard-hub-db-ai-split" });
+    const beforeCol = diff.createDiv({ cls: "dashboard-hub-db-ai-split-col" });
     beforeCol.createEl("strong", { text: t("diffModal.before") });
-    const before = beforeCol.createDiv({ cls: "llm-hub-db-ai-diff-code" });
-    const afterCol = diff.createDiv({ cls: "llm-hub-db-ai-split-col" });
+    const before = beforeCol.createDiv({ cls: "dashboard-hub-db-ai-diff-code" });
+    const afterCol = diff.createDiv({ cls: "dashboard-hub-db-ai-split-col" });
     afterCol.createEl("strong", { text: t("diffModal.after") });
-    const after = afterCol.createDiv({ cls: "llm-hub-db-ai-diff-code" });
+    const after = afterCol.createDiv({ cls: "dashboard-hub-db-ai-diff-code" });
     diff.hide();
-    const preview = this.contentEl.createEl("textarea", { cls: "llm-hub-db-ai-preview" });
+    const preview = this.contentEl.createEl("textarea", { cls: "dashboard-hub-db-ai-preview" });
     preview.rows = 10;
     preview.placeholder = "Generated result";
     preview.hide();
@@ -171,7 +171,7 @@ export class AiGenerationModal extends Modal {
 
   onClose(): void {
     this.abort?.abort();
-    this.modalEl.removeClass("llm-hub-db-ai-modal-host");
+    this.modalEl.removeClass("dashboard-hub-db-ai-modal-host");
     this.contentEl.empty();
   }
 }

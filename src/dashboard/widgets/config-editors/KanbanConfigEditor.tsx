@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
-import { TFile, TFolder } from "obsidian";
+import { TFile } from "obsidian";
 import { t } from "src/i18n";
 import type { ConfigEditorProps } from "../../types";
 import { kanbanDefinitionFromConfig, parseKanbanFile, serializeKanbanFile } from "../../kanbanFile";
@@ -22,7 +22,6 @@ interface KanbanConfig {
   showUnspecified?: boolean;
   displayFields?: Array<string | KanbanDisplayField>;
   cardOrder?: string[];
-  timelineName?: string;
 }
 
 interface KanbanDisplayField {
@@ -82,16 +81,6 @@ export function KanbanConfigEditor({
     .filter((file) => file.extension.toLocaleLowerCase() === "kanban")
     .map((file) => file.path)
     .sort(), [app, rawCfg.kanban]);
-  const timelineNames = useMemo(() => {
-    const prefix = `${baseDirectory}/Timeline/`;
-    const names = app.vault.getAllLoadedFiles()
-      .filter((entry): entry is TFolder => entry instanceof TFolder && entry.path.startsWith(prefix))
-      .map((folder) => folder.path.slice(prefix.length))
-      .filter((name) => name && !name.includes("/"));
-    const current = (fileCfg ?? rawCfg).timelineName?.trim();
-    if (current && !names.includes(current)) names.push(current);
-    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
-  }, [app, rawCfg, fileCfg, baseDirectory]);
   useEffect(() => {
     const path = rawCfg.kanban?.trim();
     if (!path) { setFileCfg(null); setFileMissing(false); return; }
@@ -179,9 +168,9 @@ export function KanbanConfigEditor({
   };
 
   return (
-    <div className="llm-hub-db-fields">
+    <div className="dashboard-hub-db-fields">
       {!hideFilePicker && (
-        <div className="llm-hub-db-field">
+        <div className="dashboard-hub-db-field">
           <label>{t("dashboard.kanbanFile")}</label>
           <FilePicker
             value={rawCfg.kanban ?? ""}
@@ -189,11 +178,11 @@ export function KanbanConfigEditor({
             onChange={(kanban) => onChange(kanban ? { kanban, cardOrder: rawCfg.cardOrder } : { cardOrder: rawCfg.cardOrder })}
             placeholder={`${baseDirectory}/Kanbans/Tasks.kanban`}
           />
-          <p className="llm-hub-db-hint">{t("dashboard.kanbanFileHint").replace("Dashboards", baseDirectory)}</p>
-          {fileMissing && <p className="llm-hub-db-secret-error">{t("dashboard.kanbanFileError")}</p>}
+          <p className="dashboard-hub-db-hint">{t("dashboard.kanbanFileHint").replace("Dashboards", baseDirectory)}</p>
+          {fileMissing && <p className="dashboard-hub-db-secret-error">{t("dashboard.kanbanFileError")}</p>}
         </div>
       )}
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanBoardTitle")}</label>
         <input
           type="text"
@@ -201,10 +190,10 @@ export function KanbanConfigEditor({
           onChange={(e) => update({ title: e.target.value })}
           placeholder={t("dashboard.kanbanBoardTitlePlaceholder")}
         />
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanBoardTitleHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.kanbanBoardTitleHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanTag")}</label>
         <input
           type="text"
@@ -212,10 +201,10 @@ export function KanbanConfigEditor({
           onChange={(e) => update({ tag: e.target.value })}
           placeholder="task"
         />
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanTagHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.kanbanTagHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanFolder")}</label>
         <input
           type="text"
@@ -223,10 +212,10 @@ export function KanbanConfigEditor({
           onChange={(e) => update({ folder: e.target.value })}
           placeholder="Projects"
         />
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanFolderHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.kanbanFolderHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanStatusProperty")}</label>
         <select
           value={cfg.statusProperty ?? ""}
@@ -236,10 +225,10 @@ export function KanbanConfigEditor({
           {cfg.statusProperty && cfg.statusProperty !== "status" && !fieldNames.includes(cfg.statusProperty) && <option value={cfg.statusProperty}>{cfg.statusProperty}</option>}
           {fieldNames.filter((name) => !name.startsWith("file.")).map((name) => <option value={name} key={name}>{name}</option>)}
         </select>
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanStatusPropertyHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.kanbanStatusPropertyHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanTitleProperty")}</label>
         <select
           value={cfg.titleProperty ?? ""}
@@ -249,25 +238,13 @@ export function KanbanConfigEditor({
           {cfg.titleProperty && !fieldNames.includes(cfg.titleProperty) && <option value={cfg.titleProperty}>{cfg.titleProperty}</option>}
           {fieldNames.map((name) => <option value={name} key={name}>{name}</option>)}
         </select>
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanTitlePropertyHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.kanbanTitlePropertyHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
-        <label>{t("dashboard.kanbanTimelineName")}</label>
-        <FilePicker
-          value={cfg.timelineName ?? ""}
-          paths={timelineNames}
-          onChange={(timelineName) => update({ timelineName })}
-          placeholder={t("dashboard.kanbanTimelineSelect")}
-          searchPlaceholder={t("dashboard.kanbanTimelineSearch")}
-        />
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanTimelineHint")}</p>
-      </div>
-
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanColumns")}</label>
         {columns.map((col, i) => (
-          <div className="llm-hub-db-kanban-config-col" key={i}>
+          <div className="dashboard-hub-db-kanban-config-col" key={i}>
             <input
               type="text"
               value={col.value}
@@ -280,27 +257,27 @@ export function KanbanConfigEditor({
               onChange={(e) => updateColumn(i, { label: e.target.value })}
               placeholder={t("dashboard.kanbanColumnLabel")}
             />
-            <button type="button" className="llm-hub-db-iconbtn" onClick={() => moveColumn(i, -1)} disabled={i === 0} title={t("dashboard.moveUp")}>
+            <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => moveColumn(i, -1)} disabled={i === 0} title={t("dashboard.moveUp")}>
               <ChevronUp size={12} />
             </button>
-            <button type="button" className="llm-hub-db-iconbtn" onClick={() => moveColumn(i, 1)} disabled={i === columns.length - 1} title={t("dashboard.moveDown")}>
+            <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => moveColumn(i, 1)} disabled={i === columns.length - 1} title={t("dashboard.moveDown")}>
               <ChevronDown size={12} />
             </button>
-            <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => removeColumn(i)} title={t("dashboard.deleteWidget")}>
+            <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => removeColumn(i)} title={t("dashboard.deleteWidget")}>
               <Trash2 size={12} />
             </button>
           </div>
         ))}
-        <button type="button" className="llm-hub-db-ai-btn" onClick={addColumn}>
+        <button type="button" className="dashboard-hub-db-ai-btn" onClick={addColumn}>
           <Plus size={13} />
           {t("dashboard.kanbanAddColumn")}
         </button>
       </div>
 
-      <div className="llm-hub-db-field">
+      <div className="dashboard-hub-db-field">
         <label>{t("dashboard.kanbanDisplayFields")}</label>
         {displayFields.map((field, i) => (
-          <div className="llm-hub-db-kanban-config-col" key={i}>
+          <div className="dashboard-hub-db-kanban-config-col" key={i}>
             <select
               value={field.field}
               onChange={(e) => updateField(i, {
@@ -326,26 +303,26 @@ export function KanbanConfigEditor({
                 placeholder={t("dashboard.kanbanDisplayMaxLength")}
               />
             )}
-            <button type="button" className="llm-hub-db-iconbtn" onClick={() => moveField(i, -1)} disabled={i === 0} title={t("dashboard.moveUp")}>
+            <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => moveField(i, -1)} disabled={i === 0} title={t("dashboard.moveUp")}>
               <ChevronUp size={12} />
             </button>
-            <button type="button" className="llm-hub-db-iconbtn" onClick={() => moveField(i, 1)} disabled={i === displayFields.length - 1} title={t("dashboard.moveDown")}>
+            <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => moveField(i, 1)} disabled={i === displayFields.length - 1} title={t("dashboard.moveDown")}>
               <ChevronDown size={12} />
             </button>
-            <button type="button" className="llm-hub-db-iconbtn is-danger" onClick={() => removeField(i)} title={t("dashboard.deleteWidget")}>
+            <button type="button" className="dashboard-hub-db-iconbtn is-danger" onClick={() => removeField(i)} title={t("dashboard.deleteWidget")}>
               <Trash2 size={12} />
             </button>
           </div>
         ))}
-        <button type="button" className="llm-hub-db-ai-btn" onClick={addField} disabled={fieldNames.every((name) => displayFields.some((field) => field.field === name))}>
+        <button type="button" className="dashboard-hub-db-ai-btn" onClick={addField} disabled={fieldNames.every((name) => displayFields.some((field) => field.field === name))}>
           <Plus size={13} />
           {t("dashboard.kanbanAddDisplayField")}
         </button>
-        <p className="llm-hub-db-hint">{t("dashboard.kanbanDisplayFieldsHint")}</p>
+        <p className="dashboard-hub-db-hint">{t("dashboard.kanbanDisplayFieldsHint")}</p>
       </div>
 
-      <div className="llm-hub-db-field">
-        <label className="llm-hub-db-kanban-checkbox">
+      <div className="dashboard-hub-db-field">
+        <label className="dashboard-hub-db-kanban-checkbox">
           <input
             type="checkbox"
             checked={showUnspecified}
