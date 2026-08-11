@@ -187,7 +187,7 @@ function FileToolLauncher({
   </div>;
 }
 
-function LauncherContent({ plugin, initialTool, onClose }: { plugin: DashboardHubPlugin; initialTool: LauncherTool | null; onClose: () => void }) {
+function LauncherContent({ plugin, initialTool, initialTimelineComposerOpen, onClose }: { plugin: DashboardHubPlugin; initialTool: LauncherTool | null; initialTimelineComposerOpen: boolean; onClose: () => void }) {
   const [tool, setTool] = useState<LauncherTool | null>(initialTool);
   const tools = TOOLS.filter((item) => item.id !== "workflow" || plugin.hasCapability("workflow"));
   // Most-recently-edited first: on mobile the file you want is nearly always
@@ -226,7 +226,7 @@ function LauncherContent({ plugin, initialTool, onClose }: { plugin: DashboardHu
       </div>}
       {tool === "dashboard" && <DashboardLauncher plugin={plugin} onClose={onClose} />}
       {tool === "workflow" && <WorkflowLauncher plugin={plugin} />}
-      {tool === "timeline" && <TimelineWidget config={{ name: plugin.settings.activityTimelineName, latestCount: 20 }} ctx={ctx} />}
+      {tool === "timeline" && <TimelineWidget config={{ name: plugin.settings.activityTimelineName, latestCount: 20 }} ctx={ctx} initialComposerOpen={initialTimelineComposerOpen} />}
       {tool === "calendar" && <CalendarWidget config={{ timelineName: plugin.settings.activityTimelineName }} ctx={ctx} />}
       {tool === "memo-list" && <MemoListWidget ctx={ctx} />}
       {tool === "kanban" && <KanbanWidget config={{
@@ -262,7 +262,11 @@ function LauncherContent({ plugin, initialTool, onClose }: { plugin: DashboardHu
 export class ToolLauncherModal extends Modal {
   private root: Root | null = null;
 
-  constructor(private plugin: DashboardHubPlugin, private initialTool: LauncherTool | null = null) {
+  constructor(
+    private plugin: DashboardHubPlugin,
+    private initialTool: LauncherTool | null = null,
+    private initialTimelineComposerOpen = false,
+  ) {
     super(plugin.app);
   }
 
@@ -270,7 +274,12 @@ export class ToolLauncherModal extends Modal {
     this.modalEl.addClass("dashboard-hub-launcher-modal");
     this.contentEl.empty();
     this.root = createRoot(this.contentEl);
-    this.root.render(<LauncherContent plugin={this.plugin} initialTool={this.initialTool} onClose={() => this.close()} />);
+    this.root.render(<LauncherContent
+      plugin={this.plugin}
+      initialTool={this.initialTool}
+      initialTimelineComposerOpen={this.initialTimelineComposerOpen}
+      onClose={() => this.close()}
+    />);
   }
 
   onClose(): void {

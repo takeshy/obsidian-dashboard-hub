@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { Plus, Undo2, Redo2, Columns3, Rows3, Rocket } from "lucide-react";
+import { Plus, Undo2, Redo2, Columns3, Rows3, Rocket, PenLine } from "lucide-react";
 import { Platform, type App } from "obsidian";
 import { t } from "src/i18n";
 import type { DashboardHubPlugin } from "src/plugin";
@@ -340,19 +340,8 @@ export function DashboardCanvas({
           >
             <Redo2 size={14} />
           </button>
-          {/* The layout equalizers only make sense on a multi-column grid; on
-              mobile the dashboard is a single column, so that space goes to
-              the launcher instead. */}
-          {Platform.isMobile ? (
-            <button
-              onClick={() => new ToolLauncherModal(plugin).open()}
-              title={t("launcher.open")}
-              aria-label={t("launcher.open")}
-              className="dashboard-hub-db-toolbtn"
-            >
-              <Rocket size={14} />
-            </button>
-          ) : (
+          {/* The layout equalizers only make sense on a multi-column grid. */}
+          {!Platform.isMobile && (
             <>
               <button
                 onClick={() => handleLayoutDirection("horizontal")}
@@ -372,6 +361,22 @@ export function DashboardCanvas({
               </button>
             </>
           )}
+          <button
+            onClick={() => new ToolLauncherModal(plugin).open()}
+            title={t("launcher.open")}
+            aria-label={t("launcher.open")}
+            className="dashboard-hub-db-toolbtn"
+          >
+            <Rocket size={14} />
+          </button>
+          <button
+            onClick={() => new ToolLauncherModal(plugin, "timeline", true).open()}
+            title={t("dashboard.timelineNew")}
+            aria-label={t("dashboard.timelineNew")}
+            className="dashboard-hub-db-toolbtn is-accent"
+          >
+            <PenLine size={14} />
+          </button>
           <button
             onClick={() => setShowPalette(true)}
             className="dashboard-hub-db-toolbtn is-accent"

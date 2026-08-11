@@ -133,6 +133,11 @@ export class DashboardHubPlugin extends Plugin {
       callback: () => new ToolLauncherModal(this).open(),
     });
     this.addCommand({
+      id: "new-timeline-post",
+      name: "New Timeline post",
+      callback: () => new ToolLauncherModal(this, "timeline", true).open(),
+    });
+    this.addCommand({
       id: "create-dashboard",
       name: "Create dashboard",
       callback: () => this.promptCreateDashboard(),

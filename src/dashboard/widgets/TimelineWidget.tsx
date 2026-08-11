@@ -402,9 +402,11 @@ async function loadTimelineFiles(ctx: WidgetContext, name: string, limit: number
 export default function TimelineWidget({
   config,
   ctx,
+  initialComposerOpen = false,
 }: {
   config: unknown;
   ctx?: WidgetContext;
+  initialComposerOpen?: boolean;
 }) {
   const cfg = (config ?? {}) as TimelineConfig;
   const name = sanitizeName(typeof cfg.name === "string" && cfg.name.trim() ? cfg.name : "Timeline");
@@ -426,7 +428,7 @@ export default function TimelineWidget({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
   const [draft, setDraft] = useState("");
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
