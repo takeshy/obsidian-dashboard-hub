@@ -132,6 +132,13 @@
   overflow: auto;
   padding: 12px;
 }
+.is-mobile .dashboard-hub-db-scroll {
+  /* Obsidian's floating mobile navbar overlays the view instead of reducing
+     its height. Leave a scrollable tail so controls in the final widget (for
+     example Timeline's New button) can be moved fully above it. */
+  padding-bottom: calc(var(--mobile-navbar-height, 56px) + env(safe-area-inset-bottom) + 12px);
+  scroll-padding-bottom: calc(var(--mobile-navbar-height, 56px) + env(safe-area-inset-bottom) + 12px);
+}
 .dashboard-hub-db-grid {
   position: relative;
   min-height: 100%;
@@ -1179,7 +1186,9 @@
 .dashboard-hub-db-panel-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  /* Keep the drawer in Obsidian's modal layer. A Modal opened from a config
+     editor is appended later and must be able to stack above the drawer. */
+  z-index: var(--layer-modal, 100);
   display: flex;
   justify-content: flex-end;
   background: rgba(0, 0, 0, 0.3);
@@ -1214,6 +1223,21 @@
   justify-content: space-between;
   padding: 12px 16px;
   border-top: 1px solid var(--background-modifier-border);
+}
+.is-mobile .dashboard-hub-db-panel > .dashboard-hub-db-modal-header {
+  flex-shrink: 0;
+  padding: calc(env(safe-area-inset-top) + 8px) 8px 8px 16px;
+}
+.is-mobile .dashboard-hub-db-panel-close {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  border-radius: 10px;
+  touch-action: manipulation;
+}
+.is-mobile .dashboard-hub-db-panel-footer {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
 }
 .dashboard-hub-db-hint {
   margin: 0 0 12px;

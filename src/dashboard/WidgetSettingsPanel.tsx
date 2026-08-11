@@ -42,7 +42,13 @@ export function WidgetSettingsPanel({
             <span className="dashboard-hub-db-palette-icon">{def.icon}</span>
             <h3>{def.label}</h3>
           </div>
-          <button className="dashboard-hub-db-iconbtn" onClick={onClose} title={t("dashboard.done")}>
+          <button
+            type="button"
+            className="dashboard-hub-db-iconbtn dashboard-hub-db-panel-close"
+            onClick={onClose}
+            aria-label={t("dashboard.done")}
+            title={t("dashboard.done")}
+          >
             <X size={18} />
           </button>
         </div>
