@@ -35,12 +35,14 @@ import {
   REQUEST_RUNTIME_SKILLS_EVENT,
   UNREGISTER_RUNTIME_SKILL_EVENT,
 } from "src/integrations/dashboardSkill";
+import { appendInstructionHistory } from "src/ui/instructionHistory";
 
 export interface DashboardHubSettings {
   baseDirectory: string;
   activityTimelineName: string;
   preferredIntegrationId: string;
   preferredModels: Record<string, string>;
+  aiInstructionHistory: Partial<Record<DashboardCapability, string[]>>;
 }
 
 export interface DashboardAiIntegration {
@@ -100,6 +102,7 @@ const DEFAULT_SETTINGS: DashboardHubSettings = {
   activityTimelineName: "Timeline",
   preferredIntegrationId: "",
   preferredModels: {},
+  aiInstructionHistory: {},
 };
 
 export class DashboardHubPlugin extends Plugin {
@@ -175,6 +178,7 @@ export class DashboardHubPlugin extends Plugin {
       baseDirectory: normalizeBaseDirectory(current.baseDirectory),
       activityTimelineName: sanitizeTimelineName(current.activityTimelineName ?? "Timeline"),
       preferredModels: { ...DEFAULT_SETTINGS.preferredModels, ...(current.preferredModels ?? {}) },
+      aiInstructionHistory: { ...DEFAULT_SETTINGS.aiInstructionHistory, ...(current.aiInstructionHistory ?? {}) },
     };
     // Secret files carry their own encrypted private key and salt. Remove the
     // obsolete plugin-level key copy left by early Dashboard Hub builds.
@@ -183,6 +187,17 @@ export class DashboardHubPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  getInstructionHistory(capability: DashboardCapability): string[] {
+    return this.settings.aiInstructionHistory[capability] ?? [];
+  }
+
+  rememberInstruction(capability: DashboardCapability, instruction: string): void {
+    this.settings.aiInstructionHistory[capability] = appendInstructionHistory(
+      this.getInstructionHistory(capability), instruction,
+    );
+    void this.saveSettings();
   }
 
   async setBaseDirectory(value: string): Promise<void> {

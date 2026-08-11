@@ -1,7 +1,8 @@
-import { Modal, Notice, Setting, type App, type ButtonComponent } from "obsidian";
+import { Modal, Notice, Setting, type App, type ButtonComponent, type ToggleComponent } from "obsidian";
 import { t } from "src/i18n";
 import type { DashboardAiModel, DashboardCapability, DashboardHubPlugin } from "src/plugin";
 import { buildSplitDiffRows } from "./splitDiff";
+import { InstructionHistoryNavigator } from "./instructionHistory";
 
 interface GenerationRequest {
   modelId: string;
@@ -42,15 +43,38 @@ export class AiGenerationModal extends Modal {
     const modelSelect = modelSetting.controlEl.createEl("select");
     modelSelect.disabled = true;
 
-    const vaultSetting = new Setting(this.contentEl).setName(t("settings.vaultToolModeOptional"));
-    const vaultCheckbox = vaultSetting.controlEl.createEl("input", { type: "checkbox" });
-    vaultCheckbox.checked = true;
-    vaultCheckbox.disabled = true;
+    let vaultToggle: ToggleComponent | null = null;
+    if (this.options.capability !== "text-rewrite") {
+      new Setting(this.contentEl)
+        .setName(t("settings.vaultToolModeOptional"))
+        .addToggle((toggle) => {
+          vaultToggle = toggle;
+          toggle.setValue(true).setDisabled(true);
+        });
+    }
 
     const instruction = this.contentEl.createEl("textarea", { cls: "dashboard-hub-db-ai-instruction" });
     instruction.rows = 4;
     instruction.value = this.options.initialInstruction ?? "";
     instruction.placeholder = t("dashboard.aiBaseAdditionalPlaceholder");
+    const history = new InstructionHistoryNavigator(
+      this.options.plugin.getInstructionHistory(this.options.capability),
+    );
+    instruction.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+      const atStart = instruction.selectionStart === instruction.selectionEnd
+        && instruction.selectionStart <= instruction.value.indexOf("\n") + 1;
+      const lastLineStart = instruction.value.lastIndexOf("\n") + 1;
+      const atEnd = instruction.selectionStart === instruction.selectionEnd
+        && instruction.selectionStart >= lastLineStart;
+      const direction = event.key === "ArrowUp" && atStart ? -1 : event.key === "ArrowDown" && atEnd ? 1 : 0;
+      if (!direction) return;
+      const next = history.move(direction, instruction.value);
+      if (next == null) return;
+      event.preventDefault();
+      instruction.value = next;
+      instruction.setSelectionRange(next.length, next.length);
+    });
 
     const diff = this.contentEl.createDiv({ cls: "dashboard-hub-db-ai-split" });
     const beforeCol = diff.createDiv({ cls: "dashboard-hub-db-ai-split-col" });
@@ -84,8 +108,8 @@ export class AiGenerationModal extends Modal {
 
     const updateModelCapability = () => {
       const model = models.find((entry) => entry.id === modelSelect.value);
-      vaultCheckbox.disabled = !model?.capabilities.vaultRead;
-      if (!model?.capabilities.vaultRead) vaultCheckbox.checked = false;
+      vaultToggle?.setDisabled(!model?.capabilities.vaultRead);
+      if (!model?.capabilities.vaultRead) vaultToggle?.setValue(false);
     };
     modelSelect.addEventListener("change", updateModelCapability);
 
@@ -106,6 +130,7 @@ export class AiGenerationModal extends Modal {
           return;
         }
         this.abort?.abort();
+        this.options.plugin.rememberInstruction(this.options.capability, instruction.value);
         const abort = new AbortController();
         this.abort = abort;
         setBusy(true);
@@ -116,7 +141,7 @@ export class AiGenerationModal extends Modal {
             modelId: modelSelect.value,
             instruction: instruction.value.trim(),
             previousResult: generated || undefined,
-            allowVaultRead: vaultCheckbox.checked,
+            allowVaultRead: vaultToggle?.getValue() ?? false,
             abortSignal: abort.signal,
           });
           if (abort.signal.aborted) return;

@@ -1551,6 +1551,11 @@
   width: min(860px, 92vw);
   max-width: 92vw;
 }
+/* Timeline's mobile composer uses its own fixed layer (z-index 1000). Lift the
+   complete Obsidian modal container above it so the AI dialog stays clickable. */
+.modal-container:has(.modal.dashboard-hub-db-ai-modal-host) {
+  z-index: 1100;
+}
 .dashboard-hub-db-ai-modal {
   width: min(860px, 92vw);
   max-width: 100%;
