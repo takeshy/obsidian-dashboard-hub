@@ -49,12 +49,15 @@ function fieldNamesFromVault(app: ConfigEditorProps["app"], folder: string, tag:
   for (const file of app.vault.getMarkdownFiles()) {
     if (folderPrefix && !file.path.toLocaleLowerCase().startsWith(folderPrefix)) continue;
     const cache = app.metadataCache.getFileCache(file);
-    const frontmatter: unknown = cache?.frontmatter;
+    const frontmatter = cache?.frontmatter as unknown;
     if (!isRecord(frontmatter)) continue;
     if (normalizedTag) {
+      const frontmatterTags = Array.isArray(frontmatter.tags)
+        ? frontmatter.tags as unknown[]
+        : frontmatter.tags ? [frontmatter.tags] : [];
       const tags = [
         ...(cache?.tags?.map((entry) => entry.tag) ?? []),
-        ...(Array.isArray(frontmatter.tags) ? frontmatter.tags : frontmatter.tags ? [frontmatter.tags] : []),
+        ...frontmatterTags,
       ].map((value) => String(value).replace(/^#/, "").toLocaleLowerCase());
       if (!tags.includes(normalizedTag)) continue;
     }

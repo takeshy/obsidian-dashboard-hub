@@ -14,11 +14,10 @@ export async function downloadKanbanAttachment(app: App, file: TFile): Promise<v
   try {
     const content = await app.vault.readBinary(file);
     const url = URL.createObjectURL(new Blob([content]));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = file.name;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
+    const anchor = document.body.createEl("a", {
+      cls: "dashboard-hub-db-kanban-attachment-download",
+      attr: { href: url, download: file.name },
+    });
     anchor.click();
     anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);

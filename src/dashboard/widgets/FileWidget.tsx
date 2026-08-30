@@ -107,20 +107,18 @@ function contentPosition(root: Element, target: HTMLElement): FileViewPosition["
     range.selectNodeContents(textNode);
     const line = Array.from(range.getClientRects()).find((rect) => rect.height > 0 && rect.bottom > viewportTop);
     if (!line) continue;
-    const caretRange = (doc as Document & {
-      caretRangeFromPoint?: (x: number, y: number) => Range | null;
-    }).caretRangeFromPoint?.(
+    const caretPosition = doc.caretPositionFromPoint?.(
       Math.min(line.right - 1, line.left + 4),
       Math.max(line.top + 1, Math.min(line.bottom - 1, viewportTop)),
     );
-    const caretNode = caretRange?.startContainer?.nodeType === Node.TEXT_NODE && root.contains(caretRange.startContainer)
-      ? caretRange.startContainer
+    const caretNode = caretPosition?.offsetNode.nodeType === Node.TEXT_NODE && root.contains(caretPosition.offsetNode)
+      ? caretPosition.offsetNode
       : textNode;
     const path = nodePath(root, caretNode);
     if (!path) return undefined;
     return {
       path,
-      textOffset: caretNode === caretRange?.startContainer ? caretRange.startOffset : 0,
+      textOffset: caretNode === caretPosition?.offsetNode ? caretPosition.offset : 0,
     };
   }
   return undefined;
@@ -316,20 +314,18 @@ function setCustomHighlights(win: Window, name: string, ranges: Range[]) {
 function ensureHighlightStyle(doc: Document, name: string) {
   const id = `dashboard-hub-db-memo-highlight-${name}`;
   if (doc.getElementById(id)) return;
-  // EPUB/HTML documents live in an iframe realm where Obsidian's HTMLElement
-  // prototype helpers (such as createEl) are not installed. Use the standard
-  // DOM API so the highlight stylesheet is injected in both realms.
-  const style = doc.createElement("style");
-  style.id = id;
-  style.textContent = `
+  createEl("style", {
+    attr: { id },
+    text: `
 ::highlight(${name}) {
   background-color: rgb(217 119 6 / 0.30);
 }
 ::highlight(${name}-flash) {
   background-color: rgb(217 119 6 / 0.58);
 }
-`;
-  (doc.head ?? doc.documentElement).appendChild(style);
+`,
+    parent: doc.head ?? doc.documentElement,
+  });
 }
 
 function fileKind(path: string): "markdown" | "text" | "html" | "image" | "pdf" | "epub" | "other" {
@@ -1064,12 +1060,13 @@ export default function FileWidget({
     const position = pendingViewPositionRef.current;
     if (!position) return;
     pendingViewPositionRef.current = null;
+    if (!app) return;
     try {
-      localStorage.setItem(viewPositionStorageKey, JSON.stringify(position));
+      app.saveLocalStorage(viewPositionStorageKey, JSON.stringify(position));
     } catch {
       // Reading-position persistence is best-effort when storage is unavailable.
     }
-  }, [viewPositionStorageKey]);
+  }, [app, viewPositionStorageKey]);
 
   useEffect(() => () => {
     window.clearTimeout(viewPositionSaveTimerRef.current);
@@ -1093,7 +1090,8 @@ export default function FileWidget({
     let currentContentAnchor: FileViewPosition["contentAnchor"];
     let stored: FileViewPosition | null = null;
     try {
-      stored = parseFileViewPosition(localStorage.getItem(viewPositionStorageKey), viewPositionKey);
+      const savedPosition = app?.loadLocalStorage(viewPositionStorageKey) as unknown;
+      stored = parseFileViewPosition(typeof savedPosition === "string" ? savedPosition : null, viewPositionKey);
     } catch {
       stored = null;
     }

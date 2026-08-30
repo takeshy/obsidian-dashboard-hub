@@ -5,7 +5,7 @@ export class CreateDashboardModal extends Modal {
   private fileName = "Dashboard";
   private submitted = false;
 
-  constructor(app: App, private onSubmit: (fileName: string) => unknown | Promise<unknown>) {
+  constructor(app: App, private onSubmit: (fileName: string) => void | Promise<unknown>) {
     super(app);
   }
 

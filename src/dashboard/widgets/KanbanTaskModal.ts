@@ -52,7 +52,6 @@ export class KanbanTaskModal extends Modal {
 
     contentEl.createEl("h2", { text: this.options.mode === "new" ? t("dashboard.kanbanTaskNew") : t("dashboard.kanbanTaskEdit") });
     let titleInput: HTMLInputElement | null = null;
-    let dueInput: HTMLInputElement | null = null;
     let checklistHost: HTMLElement;
 
     new Setting(contentEl).setName(t("dashboard.kanbanNewCardNameLabel")).addText((text) => {
@@ -66,7 +65,6 @@ export class KanbanTaskModal extends Modal {
       });
     }
     new Setting(contentEl).setName(t("dashboard.kanbanTaskDue")).addText((text) => {
-      dueInput = text.inputEl;
       text.inputEl.type = "date";
       text.setValue(state.due).onChange((value) => (state.due = value));
     });
