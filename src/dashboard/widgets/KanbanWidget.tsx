@@ -3,15 +3,29 @@
 // processFrontMatter). Click a card to open the note. Works in view mode.
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Plus, X } from "lucide-react";
+import { CalendarDays, CheckSquare, Paperclip, Plus, Sparkles, X } from "lucide-react";
 import { Notice, TFile, type App } from "obsidian";
 import { t } from "src/i18n";
 import type { WidgetContext } from "../types";
 import { ensureVaultFolder } from "../dashboardFile";
-import { KanbanNewCardModal, type NewCardInput } from "./KanbanNewCardModal";
 import { KanbanCardModal } from "./KanbanCardModal";
+import { KanbanTaskModal, type KanbanTaskInput } from "./KanbanTaskModal";
+import {
+  canPreviewKanbanAttachment,
+  downloadKanbanAttachment,
+  KanbanAttachmentModal,
+} from "./KanbanAttachmentModal";
 import { parseKanbanFile, type KanbanBoardDefinition } from "../kanbanFile";
+import {
+  isCompletionColumn,
+  parseKanbanTaskBody,
+  serializeKanbanTaskBody,
+  type KanbanAttachment,
+} from "../kanbanTask";
+import { KANBAN_AI_SOURCE, parseKanbanAiTasks } from "../kanbanAi";
 import { appendTimelineEntry } from "../timelineEvents";
+import { AiGenerationModal } from "src/ui/AiGenerationModal";
+import ObsidianMarkdown from "./ObsidianMarkdown";
 
 interface KanbanColumn {
   value: string;
@@ -31,6 +45,9 @@ interface KanbanConfig {
   folder?: string;
   statusProperty?: string;
   titleProperty?: string;
+  dueProperty?: string;
+  startedProperty?: string;
+  completedProperty?: string;
   columns?: KanbanColumn[];
   showUnspecified?: boolean;
   /** Frontmatter property names shown on each card below the title. */
@@ -46,6 +63,13 @@ interface Card {
   path: string;
   fields: { field: string; label: string; value: string }[];
   tags: string[];
+  due: string;
+  started: string;
+  completed: string;
+  checklistDone: number;
+  checklistTotal: number;
+  attachmentCount: number;
+  attachments: KanbanAttachment[];
 }
 
 type FrontmatterRecord = Record<string, unknown>;
@@ -74,6 +98,11 @@ function formatFieldValue(value: unknown): string {
 
 function contentWithoutFrontmatter(content: string): string {
   return content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").trim();
+}
+
+function replaceBodyPreservingFrontmatter(content: string, body: string): string {
+  const frontmatter = content.match(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/)?.[0] ?? "";
+  return `${frontmatter}${body}`;
 }
 
 function cardFieldValue(
@@ -113,6 +142,14 @@ function normalizeDisplayFields(value: KanbanConfig["displayFields"]): KanbanDis
 function truncate(value: string, maxLength?: number): string {
   if (!maxLength || value.length <= maxLength) return value;
   return `${value.slice(0, maxLength).trimEnd()}...`;
+}
+
+function localIsoDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 const DRAG_THRESHOLD = 4;
@@ -196,14 +233,24 @@ export default function KanbanWidget({
   const folderFilter = (def.folder ?? "").trim();
   const statusProp = (def.statusProperty ?? "status").trim() || "status";
   const titleProp = (def.titleProperty ?? "").trim();
+  const dueProp = (def.dueProperty ?? "due").trim() || "due";
+  const startedProp = (def.startedProperty ?? "started").trim() || "started";
+  const completedProp = (def.completedProperty ?? "completed").trim() || "completed";
   const displayFields = normalizeDisplayFields(def.displayFields);
-  const needsFileContent = titleProp === "file.content" ||
-    displayFields.some((field) => field.field === "file.content");
   const columns = Array.isArray(def.columns) ? def.columns.filter((c) => c && typeof c.value === "string") : [];
   const showUnspecified = def.showUnspecified !== false;
 
   const [, setTick] = useState(0);
   const rerender = useCallback(() => setTick((v) => v + 1), []);
+  useEffect(() => {
+    if (!ctx) return;
+    const workspace = ctx.app.workspace as unknown as {
+      on: (name: string, callback: () => void) => { id: string };
+      offref: (ref: { id: string }) => void;
+    };
+    const ref = workspace.on("dashboard-hub:integrations-changed", rerender);
+    return () => workspace.offref(ref);
+  }, [ctx, rerender]);
 
   // Filter descriptor so vault listeners use the latest filter values.
   const filterKey = `${folderFilter}|${tagFilter}`;
@@ -253,7 +300,7 @@ export default function KanbanWidget({
 
   const [fileContents, setFileContents] = useState<Record<string, string>>({});
   useEffect(() => {
-    if (!ctx || !needsFileContent) {
+    if (!ctx) {
       setFileContents({});
       return;
     }
@@ -273,14 +320,31 @@ export default function KanbanWidget({
     const files = ctx.app.vault.getMarkdownFiles().filter(matchesBoard);
     setFileContents({});
     void Promise.all(files.map(load));
-    const ref = ctx.app.vault.on("modify", (file) => {
-      if (file instanceof TFile && matchesBoard(file)) void load(file);
-    });
+    const refs = [
+      ctx.app.vault.on("modify", (file) => {
+        if (file instanceof TFile && matchesBoard(file)) void load(file);
+      }),
+      ctx.app.vault.on("rename", (file, oldPath) => {
+        setFileContents((previous) => {
+          const next = { ...previous };
+          delete next[oldPath];
+          return next;
+        });
+        if (file instanceof TFile && matchesBoard(file)) void load(file);
+      }),
+      ctx.app.vault.on("delete", (file) => {
+        setFileContents((previous) => {
+          const next = { ...previous };
+          delete next[file.path];
+          return next;
+        });
+      }),
+    ];
     return () => {
       cancelled = true;
-      ctx.app.vault.offref(ref);
+      refs.forEach((ref) => ctx.app.vault.offref(ref));
     };
-  }, [ctx, needsFileContent, folderFilter, tagFilter]);
+  }, [ctx, folderFilter, tagFilter]);
 
   const cards: Card[] = ctx
     ? (() => {
@@ -304,13 +368,23 @@ export default function KanbanWidget({
             title = formatScalar(cardFieldValue(file, fm, titleProp, fileContents[file.path])) || title;
           }
           const tags = getFileTags(app, file).map(normTag).filter(Boolean);
+          const taskBody = parseKanbanTaskBody(fileContents[file.path] ?? "");
           const fields = displayFields
             .map(({ field, label, maxLength }) => {
               const raw = cardFieldValue(file, fm, field, fileContents[file.path]);
               return { field, label: label ?? "", value: truncate(formatFieldValue(raw), maxLength) };
             })
             .filter((f) => f.value.length > 0);
-          return { file, title, status, path: file.path, fields, tags };
+          return {
+            file, title, status, path: file.path, fields, tags,
+            due: formatScalar(fm[dueProp]),
+            started: formatScalar(fm[startedProp]),
+            completed: formatScalar(fm[completedProp]),
+            checklistDone: taskBody.checklist.filter((item) => item.completed).length,
+            checklistTotal: taskBody.checklist.length,
+            attachmentCount: taskBody.attachments.length,
+            attachments: taskBody.attachments,
+          };
         });
       })()
     : [];
@@ -506,6 +580,22 @@ export default function KanbanWidget({
                 } else {
                   frontmatter[statusProp] = found;
                 }
+                const completionIndex = uniqueColumns.findIndex((column) => column.value === found);
+                const isCompleted = completionIndex >= 0 && isCompletionColumn(
+                  found,
+                  uniqueColumns[completionIndex].label,
+                  completionIndex,
+                  uniqueColumns.length,
+                );
+                if (isCompleted) {
+                  if (!frontmatter[startedProp]) frontmatter[startedProp] = localIsoDate();
+                  frontmatter[completedProp] = localIsoDate();
+                } else {
+                  delete frontmatter[completedProp];
+                  if (found !== uniqueColumns[0]?.value && !frontmatter[startedProp]) {
+                    frontmatter[startedProp] = localIsoDate();
+                  }
+                }
               })
               .then(async () => {
                 flashLanded(card.path);
@@ -528,7 +618,18 @@ export default function KanbanWidget({
             ctx.app,
             card.file,
             card.title,
-            ctx.sourcePath ?? card.file.path,
+            {
+              status: card.status,
+              statusLabel: uniqueColumns.find((column) => column.value === card.status)?.label || card.status || t("dashboard.kanbanUnspecified"),
+              due: card.due,
+              started: card.started,
+              completed: card.completed,
+              tags: card.tags,
+              checklistDone: card.checklistDone,
+              checklistTotal: card.checklistTotal,
+              attachmentCount: card.attachmentCount,
+              fields: card.fields,
+            },
             () => {
               ctx.closeHost?.();
               const leaf = ctx.app.workspace.getLeaf(true);
@@ -536,6 +637,7 @@ export default function KanbanWidget({
                 ctx.app.workspace.setActiveLeaf(leaf, { focus: true });
               });
             },
+            () => { void openEditCard(card); },
           ).open();
         }
       };
@@ -543,27 +645,53 @@ export default function KanbanWidget({
       activeWindow.addEventListener("pointermove", onMove);
       activeWindow.addEventListener("pointerup", onUp);
     },
-    [ctx, statusProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, kanbanName],
+    [ctx, statusProp, startedProp, completedProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, kanbanName, openEditCard],
   );
 
-  // Create a note that already matches this board's filters: dropped in the
-  // configured folder, tagged with the configured tag, and set to the chosen
-  // column's status so it shows up immediately. Then open it for editing.
+  const storeAttachments = useCallback(async (notePath: string, files: File[]) => {
+    if (!ctx || files.length === 0) return [];
+    const slash = notePath.lastIndexOf("/");
+    const noteFolder = slash >= 0 ? notePath.slice(0, slash) : "";
+    const noteName = notePath.slice(slash + 1).replace(/\.md$/i, "");
+    const attachmentFolder = [noteFolder, "Attachments", sanitizeFileName(noteName)].filter(Boolean).join("/");
+    await ensureVaultFolder(ctx.app.vault, attachmentFolder);
+    const stored = [];
+    for (const source of files) {
+      const rawName = source.name.replace(/[\\/:*?"<>|#[\]]/g, "-").trim() || "attachment";
+      const dot = rawName.lastIndexOf(".");
+      const stem = dot > 0 ? rawName.slice(0, dot) : rawName;
+      const extension = dot > 0 ? rawName.slice(dot) : "";
+      let target = `${attachmentFolder}/${rawName}`;
+      for (let index = 2; ctx.app.vault.getAbstractFileByPath(target); index += 1) {
+        target = `${attachmentFolder}/${stem} ${index}${extension}`;
+      }
+      await ctx.app.vault.createBinary(target, await source.arrayBuffer());
+      stored.push({ path: target, label: source.name });
+    }
+    return stored;
+  }, [ctx]);
+
   const createCard = useCallback(
-    async ({ title, status }: NewCardInput) => {
+    async (input: KanbanTaskInput) => {
       if (!ctx) return;
       const app = ctx.app;
       const folder = folderFilter.replace(/[/\\]+$/, "");
       try {
         await ensureVaultFolder(app.vault, folder);
         const dir = folder ? `${folder}/` : "";
-        const base = sanitizeFileName(title) || t("dashboard.kanbanNewCardName");
+        const base = sanitizeFileName(input.title) || t("dashboard.kanbanNewCardName");
         let name = base;
         let n = 1;
         while (app.vault.getAbstractFileByPath(`${dir}${name}.md`)) {
           name = `${base} ${++n}`;
         }
         const file = await app.vault.create(`${dir}${name}.md`, "");
+        const attachments = await storeAttachments(file.path, input.files);
+        await app.vault.modify(file, serializeKanbanTaskBody({
+          description: input.description,
+          checklist: input.checklist,
+          attachments: [...input.attachments, ...attachments],
+        }));
         await app.fileManager.processFrontMatter(file, (fm) => {
           const frontmatter = fm as FrontmatterRecord;
           if (tagFilter) {
@@ -572,8 +700,14 @@ export default function KanbanWidget({
             if (!cur.some((tg) => normTag(String(tg)) === tagFilter)) cur.push(tagFilter);
             frontmatter.tags = cur;
           }
-          if (status) frontmatter[statusProp] = status;
-          if (titleProp && title) frontmatter[titleProp] = title;
+          if (input.status) frontmatter[statusProp] = input.status;
+          if (titleProp && !titleProp.startsWith("file.") && input.title) frontmatter[titleProp] = input.title;
+          if (input.due) frontmatter[dueProp] = input.due;
+          const completionIndex = uniqueColumns.findIndex((column) => column.value === input.status);
+          if (completionIndex >= 0 && isCompletionColumn(input.status, uniqueColumns[completionIndex].label, completionIndex, uniqueColumns.length)) {
+            frontmatter[startedProp] = localIsoDate();
+            frontmatter[completedProp] = localIsoDate();
+          }
         });
         // Stay on the dashboard — the new card appears in its column via the
         // metadata listener; the user can click it to open when ready.
@@ -582,13 +716,112 @@ export default function KanbanWidget({
         console.error("Kanban: failed to create card", e);
       }
     },
-    [ctx, folderFilter, tagFilter, statusProp, titleProp],
+    [ctx, folderFilter, tagFilter, statusProp, titleProp, dueProp, startedProp, completedProp, storeAttachments, uniqueColumns],
   );
 
   const openNewCard = useCallback(() => {
     if (!ctx) return;
-    new KanbanNewCardModal(ctx.app, uniqueColumns, (data) => void createCard(data)).open();
+    new KanbanTaskModal(ctx.app, { mode: "new", columns: uniqueColumns, onSubmit: createCard }).open();
   }, [ctx, uniqueColumns, createCard]);
+
+  async function openEditCard(card: Card) {
+    if (!ctx) return;
+    const content = await ctx.app.vault.cachedRead(card.file);
+    const task = parseKanbanTaskBody(contentWithoutFrontmatter(content));
+    new KanbanTaskModal(ctx.app, {
+      mode: "edit",
+      columns: uniqueColumns,
+      initial: {
+        title: card.title,
+        status: card.status,
+        due: card.due,
+        description: task.description,
+        checklist: task.checklist,
+        attachments: task.attachments,
+      },
+      onSubmit: async (input) => {
+        const attachments = await storeAttachments(card.file.path, input.files);
+        await ctx.app.fileManager.processFrontMatter(card.file, (fm) => {
+          const frontmatter = fm as FrontmatterRecord;
+          if (input.status) frontmatter[statusProp] = input.status;
+          if (input.due) frontmatter[dueProp] = input.due;
+          else delete frontmatter[dueProp];
+          if (titleProp && !titleProp.startsWith("file.")) frontmatter[titleProp] = input.title;
+          const completionIndex = uniqueColumns.findIndex((column) => column.value === input.status);
+          if (completionIndex >= 0 && isCompletionColumn(input.status, uniqueColumns[completionIndex].label, completionIndex, uniqueColumns.length)) {
+            if (!frontmatter[startedProp]) frontmatter[startedProp] = localIsoDate();
+            if (!frontmatter[completedProp]) frontmatter[completedProp] = localIsoDate();
+          } else {
+            delete frontmatter[completedProp];
+          }
+        });
+        const currentContent = await ctx.app.vault.read(card.file);
+        await ctx.app.vault.modify(card.file, replaceBodyPreservingFrontmatter(currentContent, serializeKanbanTaskBody({
+          description: input.description,
+          checklist: input.checklist,
+          attachments: [...input.attachments, ...attachments],
+        })));
+        if ((!titleProp || titleProp.startsWith("file.")) && input.title !== card.file.basename) {
+          const parent = card.file.parent?.path ?? "";
+          const dir = parent ? `${parent}/` : "";
+          const base = sanitizeFileName(input.title) || card.file.basename;
+          let target = `${dir}${base}.md`;
+          for (let index = 2; ctx.app.vault.getAbstractFileByPath(target) && target !== card.file.path; index += 1) {
+            target = `${dir}${base} ${index}.md`;
+          }
+          if (target !== card.file.path) {
+            const oldPath = card.file.path;
+            await ctx.app.fileManager.renameFile(card.file, target);
+            if (cardOrder.includes(oldPath)) {
+              persistCardOrder(cardOrder.map((path) => path === oldPath ? target : path));
+            }
+          }
+        }
+      },
+    }).open();
+  }
+
+  const openAiCreate = useCallback(() => {
+    if (!ctx || !ctx.plugin.hasCapability("text-rewrite")) return;
+    const today = localIsoDate();
+    new AiGenerationModal(ctx.app, {
+      plugin: ctx.plugin,
+      capability: "text-rewrite",
+      title: t("dashboard.kanbanAiCreate"),
+      description: t("dashboard.kanbanAiDescription"),
+      original: "[]",
+      generate: ({ modelId, instruction, previousResult, abortSignal }) => ctx.plugin.rewriteText({
+        modelId,
+        content: KANBAN_AI_SOURCE.replace("{{today}}", today),
+        instruction: `Task request:\n${instruction}\n\nReturn only the requested JSON array.`,
+        previousResult,
+        context: "memo",
+        abortSignal,
+      }),
+      validate: (result) => { parseKanbanAiTasks(result); },
+      onApply: async (result) => {
+        for (const task of parseKanbanAiTasks(result)) {
+          await createCard({
+            ...task,
+            status: uniqueColumns[0]?.value ?? "",
+            attachments: [],
+            files: [],
+          });
+        }
+      },
+    }).open();
+  }, [ctx, createCard, uniqueColumns]);
+
+  const openAttachment = useCallback((attachment: KanbanAttachment) => {
+    if (!ctx) return;
+    const file = ctx.app.vault.getAbstractFileByPath(attachment.path);
+    if (!(file instanceof TFile)) {
+      new Notice(t("dashboard.kanbanAttachmentMissing"));
+      return;
+    }
+    if (canPreviewKanbanAttachment(file)) new KanbanAttachmentModal(ctx.app, file).open();
+    else void downloadKanbanAttachment(ctx.app, file);
+  }, [ctx]);
 
   if (!ctx) return null;
 
@@ -620,13 +853,58 @@ export default function KanbanWidget({
             onPointerDown={(e) => onCardPointerDown(e, card)}
             title={t("dashboard.kanbanDragToMove")}
           >
-            <div className="dashboard-hub-db-kanban-card-title">{card.title}</div>
+            <ObsidianMarkdown
+              app={ctx.app}
+              markdown={card.title}
+              sourcePath={card.path}
+              className="dashboard-hub-db-kanban-card-title dashboard-hub-db-kanban-card-markdown"
+            />
+            {(card.due || card.completed || card.checklistTotal > 0 || card.attachmentCount > 0) && (
+              <div className="dashboard-hub-db-kanban-task-meta">
+                {card.due && (
+                  <span className={!card.completed && card.due < localIsoDate() ? "is-overdue" : ""}>
+                    <CalendarDays size={12} />{card.due}
+                  </span>
+                )}
+                {card.checklistTotal > 0 && <span><CheckSquare size={12} />{card.checklistDone}/{card.checklistTotal}</span>}
+                {card.attachmentCount > 0 && <span><Paperclip size={12} />{card.attachmentCount}</span>}
+                {card.completed && <span className="is-completed"><CheckSquare size={12} />{card.completed}</span>}
+              </div>
+            )}
             {card.fields.map((f) => (
               <div className="dashboard-hub-db-kanban-card-field" key={f.field}>
                 {f.label && <span className="dashboard-hub-db-kanban-card-field-name">{f.label}</span>}
-                <span className="dashboard-hub-db-kanban-card-field-value">{f.value}</span>
+                <ObsidianMarkdown
+                  app={ctx.app}
+                  markdown={f.value}
+                  sourcePath={card.path}
+                  className="dashboard-hub-db-kanban-card-field-value dashboard-hub-db-kanban-card-markdown"
+                />
               </div>
             ))}
+            {card.attachments.length > 0 && (
+              <div className="dashboard-hub-db-kanban-card-attachments">
+                {card.attachments.map((attachment, index) => {
+                  const attachmentFile = ctx.app.vault.getAbstractFileByPath(attachment.path);
+                  const previewable = attachmentFile instanceof TFile && canPreviewKanbanAttachment(attachmentFile);
+                  return (
+                    <button
+                      type="button"
+                      key={`${attachment.path}-${index}`}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openAttachment(attachment);
+                      }}
+                      title={previewable ? t("dashboard.kanbanAttachmentPreview") : t("dashboard.kanbanAttachmentDownload")}
+                    >
+                      <Paperclip size={12} />
+                      <span>{attachment.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ))}
         {cardsInCol.length === 0 && (
@@ -652,6 +930,18 @@ export default function KanbanWidget({
             </select>
             {selectedTag && <button type="button" className="dashboard-hub-db-iconbtn" onClick={() => setSelectedTag("")} title={t("dashboard.kanbanClearTagFilter")}><X size={13} /></button>}
           </div>
+        )}
+        {ctx.plugin.hasCapability("text-rewrite") && (
+          <button
+            type="button"
+            className="dashboard-hub-db-kanban-ai"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => { event.stopPropagation(); openAiCreate(); }}
+            title={t("dashboard.kanbanAiCreate")}
+          >
+            <Sparkles size={13} />
+            <span>{t("dashboard.kanbanAiCreate")}</span>
+          </button>
         )}
         <button
           type="button"
@@ -679,7 +969,12 @@ export default function KanbanWidget({
           className="dashboard-hub-db-kanban-ghost"
           style={{ left: drag.x - drag.offsetX, top: drag.y - drag.offsetY }}
         >
-          <div className="dashboard-hub-db-kanban-card-title">{drag.card.title}</div>
+          <ObsidianMarkdown
+            app={ctx.app}
+            markdown={drag.card.title}
+            sourcePath={drag.card.path}
+            className="dashboard-hub-db-kanban-card-title dashboard-hub-db-kanban-card-markdown"
+          />
         </div>
       )}
     </div>

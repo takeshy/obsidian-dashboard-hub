@@ -55,7 +55,11 @@ Some sites block iframes with `X-Frame-Options` or `Content-Security-Policy`; th
 
 # Kanban Widget
 
-The Kanban widget renders notes matching a tag and/or folder filter as cards grouped by a frontmatter status property. Dragging a card to another column updates that note's frontmatter. Dragging within a column persists manual card order. Clicking a card opens a preview modal with an open-note action.
+The Kanban widget renders notes matching a tag and/or folder filter as cards grouped by a frontmatter status property. Dragging a card to another column updates that note's frontmatter. Dragging within a column persists manual card order. Clicking a card opens a preview modal with edit and open-note actions.
+
+Tasks can be edited without leaving the board. The task editor supports a due date, Markdown checklist, description, and file attachments stored in the Vault. Attachment names appear on the card; images, PDFs, EPUBs, and Markdown files open in a preview modal, while other formats download directly. Card titles and configured display fields render Obsidian Markdown in a compact layout. Moving a card into a completion column (for example `done` or `完了`) automatically writes the completion date; moving it out removes that date. The default frontmatter fields are `due`, `started`, and `completed` and can be overridden in a hand-edited `.kanban` definition with `dueProperty`, `startedProperty`, and `completedProperty`.
+
+When a connected AI Hub integration provides text rewriting, the board header also shows **Create with AI**. It turns a natural-language request into one or more reviewable tasks, including inferred explicit/relative deadlines and checklist items. The action is hidden when no compatible LLM integration is connected.
 
 Settings:
 

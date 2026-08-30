@@ -69,7 +69,7 @@ files.
 | --- | --- |
 | **Timeline** | Your activity log: automatic entries from other widgets plus your own posts, with tags, wikilinks, pinned posts, filters, and image attachments. |
 | **Calendar** | Events and activity from a Timeline, collected into a monthly view with day details. Rescheduling logs back to the Timeline. |
-| **Kanban** | Notes grouped by a frontmatter status field. Dragging a card updates the source note and records the change. Board definitions are reusable across dashboards. |
+| **Kanban** | Notes grouped by a frontmatter status field. Tasks support due dates, checklists, descriptions, Vault attachments, and automatic completion dates. A connected LLM can create tasks from natural language. Dragging a card updates the source note and records the change. |
 | **Secret Manager** | Password-protected `.encrypted` files: search, unlock, copy, edit in place, and per-secret metadata. |
 | **File** | Markdown, text, HTML, images, PDF, EPUB, code, CSV, and more. Plain-text formats can be edited inline; PDF, EPUB, and Markdown support quote-linked memos. |
 | **MemoList** | A searchable index of reading memos stored under the configured Base directory. |

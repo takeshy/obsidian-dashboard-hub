@@ -9,6 +9,10 @@ export interface KanbanBoardDefinition {
   folder?: string;
   statusProperty?: string;
   titleProperty?: string;
+  /** Frontmatter fields used by the task editor (defaults: due/started/completed). */
+  dueProperty?: string;
+  startedProperty?: string;
+  completedProperty?: string;
   columns?: Array<{ value: string; label: string }>;
   showUnspecified?: boolean;
   displayFields?: Array<string | { field: string; label?: string; maxLength?: number }>;

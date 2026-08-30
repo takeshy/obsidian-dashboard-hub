@@ -221,8 +221,12 @@ export class DashboardHubPlugin extends Plugin {
       return () => undefined;
     }
     this.integrations.set(integration.id, integration);
+    this.notifyIntegrationChange();
     return () => {
-      if (this.integrations.get(integration.id) === integration) this.integrations.delete(integration.id);
+      if (this.integrations.get(integration.id) === integration) {
+        this.integrations.delete(integration.id);
+        this.notifyIntegrationChange();
+      }
     };
   }
 
@@ -230,7 +234,14 @@ export class DashboardHubPlugin extends Plugin {
     if (!request.id) return false;
     const current = this.integrations.get(request.id);
     if (!shouldUnregisterDashboardIntegration(current, request)) return false;
-    return this.integrations.delete(request.id);
+    const removed = this.integrations.delete(request.id);
+    if (removed) this.notifyIntegrationChange();
+    return removed;
+  }
+
+  private notifyIntegrationChange(): void {
+    const workspace = this.app.workspace as unknown as { trigger: (name: string) => void };
+    workspace.trigger("dashboard-hub:integrations-changed");
   }
 
   getIntegrations(): DashboardAiIntegration[] {
