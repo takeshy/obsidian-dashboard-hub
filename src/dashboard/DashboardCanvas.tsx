@@ -198,12 +198,9 @@ export function DashboardCanvas({
         layout: { lg: { x: 0, y: maxY, w: defaultSize.w, h: defaultSize.h } },
         config: { ...(def.defaultConfig as Record<string, unknown>) },
       };
-      const scrollArea = containerRef.current?.parentElement;
-      const areaHeight = scrollArea?.clientHeight ?? 600;
-      const targetRows = Math.max(6, Math.floor(areaHeight / (data.grid.rowHeight + data.grid.gap)));
       commit({
         ...data,
-        widgets: buildAddedLayout(data.widgets, newWidget, activeLayoutDirection, data.grid.cols, targetRows),
+        widgets: buildAddedLayout(data.widgets, newWidget, activeLayoutDirection, data.grid.cols),
       });
       setShowPalette(false);
       setMaximizedWidgetId(null);
