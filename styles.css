@@ -161,6 +161,11 @@
 /* Grid cell */
 .dashboard-hub-db-cell {
   position: relative;
+  /* Grid items default to min-width/min-height:auto, which lets a cell's
+     intrinsic size (or the explicit px width applied during a resize preview)
+     inflate the tracks it spans and squeeze neighbouring widgets. */
+  min-width: 0;
+  min-height: 0;
   border: 1px solid transparent;
   border-radius: 8px;
   background: var(--background-primary);

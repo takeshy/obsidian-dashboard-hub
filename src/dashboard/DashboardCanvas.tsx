@@ -8,6 +8,7 @@ import { generateId } from "src/utils/id";
 import { useBreakpoint } from "./useBreakpoint";
 import { useGridLayout } from "./useGridLayout";
 import { buildAddedLayout, buildEqualizedLayout, type EqualizeDirection } from "./equalizeLayout";
+import { compactDashboard } from "./layoutMath";
 import GridCell from "./GridCell";
 import { WidgetPalette } from "./WidgetPalette";
 import { WidgetSettingsPanel } from "./WidgetSettingsPanel";
@@ -254,9 +255,15 @@ export function DashboardCanvas({
     (widgetId: string) => {
       setEditingWidgetId(null);
       setPendingNewWidgetId(null);
-      commit({ ...data, widgets: data.widgets.filter((w) => w.id !== widgetId) });
+      // Close the hole the removed widget leaves so the widgets below float up.
+      commit(
+        compactDashboard(
+          { ...data, widgets: data.widgets.filter((w) => w.id !== widgetId) },
+          breakpoint ?? "lg",
+        ),
+      );
     },
-    [data, commit],
+    [data, commit, breakpoint],
   );
 
   const editingWidget = useMemo(
@@ -297,7 +304,10 @@ export function DashboardCanvas({
   const gridStyle = useMemo(
     () => ({
       display: "grid",
-      gridTemplateColumns: `repeat(${grid.cols}, 1fr)`,
+      // `1fr` alone means minmax(auto, 1fr): a cell's intrinsic size (or the px
+      // width applied during a resize preview) could widen the columns it spans
+      // and shrink neighbouring widgets. A zero minimum keeps every column equal.
+      gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))`,
       gridAutoRows: `${grid.rowHeight}px`,
       gap: `${grid.gap}px`,
     }),

@@ -7,6 +7,7 @@ import {
   type GridLayout,
 } from "./types";
 import { updateWidgetLayout, deriveSmLayout } from "./dashboardFile";
+import { compactPositions, resolveCollisions, snapGridDelta } from "./layoutMath";
 
 /**
  * Get the layout position for a widget at the given breakpoint.
@@ -14,16 +15,6 @@ import { updateWidgetLayout, deriveSmLayout } from "./dashboardFile";
  */
 export function getWidgetPos(widget: Widget, bp: Breakpoint): LayoutPos {
   return widget.layout[bp] ?? widget.layout.lg ?? { x: 0, y: 0, w: 6, h: 3 };
-}
-
-/** Check if two layout rectangles overlap. */
-function overlaps(a: LayoutPos, b: LayoutPos): boolean {
-  return (
-    a.x < b.x + b.w &&
-    a.x + a.w > b.x &&
-    a.y < b.y + b.h &&
-    a.y + a.h > b.y
-  );
 }
 
 export interface GridLayoutResult {
@@ -84,8 +75,7 @@ export function useGridLayout({
     (widgetId: string, dxPx: number, dyPx: number): LayoutPos => {
       const current = posMapRef.current.get(widgetId) ?? { x: 0, y: 0, w: 6, h: 3 };
 
-      const gx = cellW > 0 ? Math.round(dxPx / cellW) : 0;
-      const gy = cellH > 0 ? Math.round(dyPx / cellH) : 0;
+      const { gx, gy } = snapGridDelta(dxPx, dyPx, cellW, cellH);
 
       const nx = Math.max(0, Math.min(current.x + gx, grid.cols - current.w));
       const ny = Math.max(0, current.y + gy);
@@ -99,8 +89,7 @@ export function useGridLayout({
     (widgetId: string, dxPx: number, dyPx: number): LayoutPos => {
       const current = posMapRef.current.get(widgetId) ?? { x: 0, y: 0, w: 6, h: 3 };
 
-      const gw = cellW > 0 ? Math.round(dxPx / cellW) : 0;
-      const gh = cellH > 0 ? Math.round(dyPx / cellH) : 0;
+      const { gx: gw, gy: gh } = snapGridDelta(dxPx, dyPx, cellW, cellH);
 
       const nw = Math.max(1, Math.min(current.w + gw, grid.cols - current.x));
       const nh = Math.max(1, current.h + gh);
@@ -115,35 +104,30 @@ export function useGridLayout({
       const bp = breakpoint ?? "lg";
       const current = dataRef.current;
 
-      // Cascading collision resolution: the moved/resized widget stays at `pos`;
-      // every other widget is processed top-to-bottom and pushed straight down
-      // until it clears all already-placed widgets. Pushing one widget can
-      // create a new overlap with another, so each is re-checked in a loop —
-      // unlike a single pass, this resolves chains of overlaps.
-      const placed: LayoutPos[] = [pos];
-      const moves = new Map<string, LayoutPos>();
-
+      // 1) The moved/resized widget is the anchor; anything it now overlaps is
+      //    pushed straight down (cascading).
+      // 2) Every widget, anchor included, is then pulled up as far as it can go
+      //    so shrinking or moving a widget never leaves an empty band between
+      //    vertically stacked widgets.
       const others = current.widgets
         .filter((w) => w.id !== widgetId)
-        .map((w) => ({ id: w.id, pos: posMapRef.current.get(w.id) ?? getWidgetPos(w, bp) }))
-        .sort((a, b) => a.pos.y - b.pos.y || a.pos.x - b.pos.x);
+        .map((w) => ({ id: w.id, pos: posMapRef.current.get(w.id) ?? getWidgetPos(w, bp) }));
+      const resolved = resolveCollisions({ id: widgetId, pos }, others);
+      const compacted = compactPositions(resolved);
 
-      for (const other of others) {
-        let p = other.pos;
-        // y strictly increases each iteration (an overlap means some placed
-        // rect's bottom is below p.y), so this terminates; guard is belt-and-braces.
-        for (let guard = 0; guard < 1000; guard++) {
-          const hits = placed.filter((r) => overlaps(p, r));
-          if (hits.length === 0) break;
-          const maxBottom = Math.max(...hits.map((r) => r.y + r.h));
-          if (maxBottom <= p.y) break;
-          p = { ...p, y: maxBottom };
+      const before = new Map(others.map((o) => [o.id, o.pos]));
+      const moves = new Map<string, LayoutPos>();
+      let anchorPos = pos;
+      for (const item of compacted) {
+        if (item.id === widgetId) {
+          anchorPos = item.pos;
+          continue;
         }
-        placed.push(p);
-        if (p.y !== other.pos.y) moves.set(other.id, p);
+        const prev = before.get(item.id);
+        if (!prev || prev.y !== item.pos.y) moves.set(item.id, item.pos);
       }
 
-      let updated = updateWidgetLayout(current, widgetId, bp, pos);
+      let updated = updateWidgetLayout(current, widgetId, bp, anchorPos);
       if (moves.size > 0) {
         updated = {
           ...updated,

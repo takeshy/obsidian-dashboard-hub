@@ -32,7 +32,7 @@ The dashboard grid uses 12 columns, row height `80`, and gap `8` by default. Wid
 - `lg` - large-screen layout.
 - `sm` - small-screen layout, derived from `lg` when missing.
 
-Widgets can be dragged and resized directly. The layout engine prevents overlap by pushing colliding widgets downward. File widgets disable drag/resize handles while their memo panel is open (desktop only; on mobile the handles stay enabled).
+Widgets can be dragged and resized directly. The layout engine prevents overlap by pushing colliding widgets downward, then pulls every widget up to close empty rows (vertical compaction). While dragging or resizing, small pointer drift on the non-dominant axis is ignored until it exceeds a full cell. File widgets disable drag/resize handles while their memo panel is open (desktop only; on mobile the handles stay enabled).
 
 The toolbar provides:
 
