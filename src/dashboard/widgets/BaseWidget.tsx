@@ -1,5 +1,5 @@
 // Base widget — embeds a named view of an Obsidian `.base` file via the native
-// embed system, so the dashboard shows the real Bases UI (table / cards / list).
+// embed system, so the dashboard shows the real Bases UI (table / cards / list / kanban).
 
 import { TFile } from "obsidian";
 import { t } from "src/i18n";

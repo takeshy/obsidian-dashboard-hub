@@ -627,8 +627,10 @@ export default function KanbanWidget({
               tags: card.tags,
               checklistDone: card.checklistDone,
               checklistTotal: card.checklistTotal,
-              attachmentCount: card.attachmentCount,
-              fields: card.fields,
+              // Skip fields the modal already shows in its header, summary or body.
+              fields: card.fields.filter(({ field }) => ![
+                "file.content", "file.name", "tags", titleProp, statusProp, dueProp, startedProp, completedProp,
+              ].includes(field)),
             },
             () => {
               ctx.closeHost?.();
@@ -645,7 +647,7 @@ export default function KanbanWidget({
       activeWindow.addEventListener("pointermove", onMove);
       activeWindow.addEventListener("pointerup", onUp);
     },
-    [ctx, statusProp, startedProp, completedProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, kanbanName, openEditCard],
+    [ctx, statusProp, titleProp, dueProp, startedProp, completedProp, columnForCard, flashLanded, hitTestDrop, persistCardOrder, reorderCard, uniqueColumns, kanbanName, openEditCard],
   );
 
   const storeAttachments = useCallback(async (notePath: string, files: File[]) => {

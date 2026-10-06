@@ -3941,3 +3941,27 @@
 .is-mobile .workspace-leaf-content[data-type="dashboard-hub-kanban-view"] .view-content {
   padding-bottom: 0 !important;
 }
+.dashboard-hub-db-base-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.dashboard-hub-db-base-section-title {
+  margin: 0;
+  font-size: var(--font-ui-small);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.dashboard-hub-db-base-section .dashboard-hub-db-field > .dashboard-hub-db-hint,
+.dashboard-hub-db-base-section details > .dashboard-hub-db-hint {
+  margin: 0;
+}
+.dashboard-hub-db-base-section details > .dashboard-hub-db-hint {
+  margin-top: 4px;
+}
+.dashboard-hub-db-base-create-row .dashboard-hub-db-picker {
+  flex: 1;
+  min-width: 0;
+}

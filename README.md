@@ -73,9 +73,13 @@ files.
 | **Secret Manager** | Password-protected `.encrypted` files: search, unlock, copy, edit in place, and per-secret metadata. |
 | **File** | Markdown, text, HTML, images, PDF, EPUB, code, CSV, and more. Plain-text formats can be edited inline; PDF, EPUB, and Markdown support quote-linked memos. |
 | **MemoList** | A searchable index of reading memos stored under the configured Base directory. |
-| **Base** | Obsidian's native Bases tables, cards, and lists, with an editor for the first view. |
+| **Base** | Obsidian's native Bases tables, cards, lists, and kanban, with an editor for the first view. Native kanban requires Obsidian 1.14+. |
 | **Web Embed** | Any embeddable HTTP or HTTPS page, with a quick link to open it in the browser. |
 | **Workflow** | Run a connected Hub workflow and keep its Markdown or HTML output on the dashboard. |
+
+To migrate an existing Kanban board to native Bases, add a Base widget and select a `.kanban` file under **Create new base → From a Kanban board** in its settings. This creates a new `.base` in `<Base directory>/Bases`, reusing the notes, filters, status property, column order, and display fields. The original board and notes are kept. Legacy inline dashboard boards are converted to `.kanban` files when the dashboard opens, and can then be copied. Check the new Base before removing the old Kanban widget.
+
+Native kanban does not transfer column aliases, manual card order, body previews, task editing, or Timeline/start/completion date automation. Note bodies, checklists, attachments, and existing dates remain available in the notes. Unmatched status values become individual columns. The copy saves the current columns; add future status values through the native Group menu. Changing the grouping property in settings resets the previous column order and visibility.
 
 The launcher opens Dashboard, Workflow, Timeline, Calendar, MemoList, Kanban,
 and Secret Manager directly.

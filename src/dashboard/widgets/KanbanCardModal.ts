@@ -20,7 +20,6 @@ export interface KanbanCardModalSummary {
   tags: string[];
   checklistDone: number;
   checklistTotal: number;
-  attachmentCount: number;
   fields: Array<{ field: string; label: string; value: string }>;
 }
 
@@ -88,7 +87,10 @@ export class KanbanCardModal extends Modal {
           void downloadKanbanAttachment(this.app, linkedFile);
         }
       });
-      await MarkdownRenderer.render(this.app, content, body, this.file.path, this.component);
+      // Render only the note body: frontmatter values are already summarized above,
+      // and a leading heading that repeats the card title is dropped.
+      await MarkdownRenderer.render(this.app, this.withoutTitleHeading(markdownBody), body, this.file.path, this.component);
+      if (!body.hasChildNodes()) body.remove();
       const renderedCheckboxes = Array.from(body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
       const taskCheckboxes = task.checklist.length > 0
         ? renderedCheckboxes.slice(-task.checklist.length)
@@ -132,9 +134,6 @@ export class KanbanCardModal extends Modal {
     if (this.summary.checklistTotal > 0) {
       addItem(t("dashboard.kanbanTaskChecklist"), `${this.summary.checklistDone} / ${this.summary.checklistTotal}`, "is-checklist");
     }
-    if (this.summary.attachmentCount > 0) {
-      addItem(t("dashboard.kanbanTaskAttachments"), String(this.summary.attachmentCount));
-    }
     if (this.summary.tags.length > 0) {
       const tags = summary.createDiv({ cls: "dashboard-hub-db-kanban-modal-tags" });
       tags.createSpan({ cls: "dashboard-hub-db-kanban-modal-summary-label", text: t("dashboard.kanbanTaskTags") });
@@ -147,6 +146,12 @@ export class KanbanCardModal extends Modal {
       void MarkdownRenderer.render(this.app, field.value, value, this.file.path, this.component);
     });
     if (!summary.hasChildNodes()) summary.remove();
+  }
+
+  private withoutTitleHeading(markdown: string): string {
+    const match = markdown.match(/^\s*#\s+(.+?)\s*#*\s*(?:\r?\n|$)/);
+    if (!match || match[1].trim() !== this.title.trim()) return markdown;
+    return markdown.slice(match[0].length);
   }
 
   private localIsoDate(): string {

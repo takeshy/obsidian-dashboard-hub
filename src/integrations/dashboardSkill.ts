@@ -48,7 +48,10 @@ The narrow \`sm\` layout is optional and is derived as a full-width stack when o
 
 - \`base\`: \`{ base: "Dashboards/Bases/Tasks.base" }\`. It always displays
   the first view in the Base file. Change that first view's \`type\` to select
-  table, cards, or list presentation; do not add a \`view\` field.
+  table, cards, list, or kanban presentation; do not add a \`view\` field.
+  Native kanban requires Obsidian 1.14+ and a \`groupBy\` property (for example,
+  \`groupBy: { property: "note.status", direction: "ASC" }\`). Native Bases
+  changes do not trigger Dashboard Hub's Kanban Timeline/date automation.
 - \`file\`: \`{ path: "Notes/Home.md", showHeader: true }\`. Memo create, update, and delete activity is written to the globally configured activity Timeline.
 - \`web\`: \`{ url: "https://example.com", showHeader: true }\`.
 - \`workflow\`: \`{ workflow: "workflows/Digest.md", output: "markdown", outputVariable: "result", refreshInterval: 0 }\`.

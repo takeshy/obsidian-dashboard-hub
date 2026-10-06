@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, GripVertical, Pencil, Plus, Sparkles, X } from "lucide-react";
-import { Notice, TFile, parseYaml, stringifyYaml } from "obsidian";
+import { Notice, TFile, getAllTags, parseYaml, stringifyYaml } from "obsidian";
 import { t } from "src/i18n";
 import type { ConfigEditorProps } from "../../types";
 import { dashboardSubfolder } from "../../types";
 import { ensureVaultFolder } from "../../dashboardFile";
 import { FilePicker } from "./FilePicker";
 import { AiGenerationModal } from "src/ui/AiGenerationModal";
+import { parseKanbanFile } from "../../kanbanFile";
+import { kanbanToBase } from "../../kanbanToBase";
 import {
   isRelativeDateValue,
   parseRelativeDateExpression,
@@ -104,8 +106,8 @@ function sanitizeBaseName(name: string): string {
     .trim() || "New Base";
 }
 
-function normalizeView(view: Record<string, unknown>, fallbackIndex: number): EditableBaseView {
-  const type = view.type === "cards" || view.type === "list" || view.type === "table" ? view.type : "table";
+export function normalizeView(view: Record<string, unknown>, fallbackIndex: number): EditableBaseView {
+  const type = typeof view.type === "string" && view.type.trim() ? view.type : "table";
   const name = typeof view.name === "string" && view.name.trim() ? view.name : `View ${fallbackIndex + 1}`;
   const order = Array.isArray(view.order)
     ? view.order.filter((p): p is string => typeof p === "string" && p.trim().length > 0)
@@ -241,6 +243,8 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importPath, setImportPath] = useState("");
+  const kanbanFiles = app.vault.getFiles().filter((file) => file.extension === "kanban").map((file) => file.path).sort();
   const savingRef = useRef(false);
   const pendingSaveRef = useRef<{ content: string; file: TFile } | null>(null);
   const suppressExternalContentRef = useRef<string | null>(null);
@@ -392,6 +396,38 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
     }
   };
 
+  const importKanban = async () => {
+    if (creating || !importPath) return;
+    setCreating(true);
+    try {
+      const source = app.vault.getAbstractFileByPath(importPath);
+      if (!(source instanceof TFile)) throw new Error(t("dashboard.kanbanFileError"));
+      const board = parseKanbanFile(await app.vault.read(source));
+      if (!board) throw new Error(t("dashboard.kanbanFileError"));
+      const status = (board.statusProperty ?? "status").trim() || "status";
+      const folder = (board.folder ?? "").trim().replace(/[/\\]+$/, "").toLowerCase();
+      const tag = (board.tag ?? "").trim().replace(/^#/, "").toLowerCase();
+      const otherStatuses: string[] = [];
+      for (const file of app.vault.getMarkdownFiles()) {
+        if (folder && !file.path.toLowerCase().startsWith(`${folder}/`)) continue;
+        const cache = app.metadataCache.getFileCache(file);
+        if (tag && !(cache && getAllTags(cache)?.some((value) => value.replace(/^#/, "").toLowerCase() === tag))) continue;
+        const value = cache?.frontmatter?.[status];
+        if (value != null && String(value)) otherStatuses.push(String(value));
+      }
+      await ensureVaultFolder(app.vault, basesFolder);
+      const path = uniquePath(app.vault.getFiles().map((file) => file.path), board.title || source.basename, basesFolder);
+      await app.vault.create(path, stringifyYaml(kanbanToBase(board, otherStatuses)));
+      refreshBaseFiles();
+      updateWidgetConfig({ base: path });
+      new Notice(t("dashboard.baseCreated"));
+    } catch (err) {
+      new Notice(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const openAi = (mode: "create" | "modify") => {
     new AiGenerationModal(app, {
       plugin,
@@ -430,46 +466,69 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
   if (!cfg.base) {
     return (
       <div className="dashboard-hub-db-fields">
-        <div className="dashboard-hub-db-field">
-          <label>{t("dashboard.baseCreateNew")}</label>
-          <div className="dashboard-hub-db-base-create-row">
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void createNewBase();
-                }
-              }}
-              placeholder="New Base"
+        <section className="dashboard-hub-db-base-section">
+          <h4 className="dashboard-hub-db-base-section-title">{t("dashboard.baseImportExisting")}</h4>
+          <div className="dashboard-hub-db-field">
+            <FilePicker
+              value=""
+              onChange={(path) => updateWidgetConfig({ base: path })}
+              paths={baseFiles}
+              placeholder={t("dashboard.baseSelectFile")}
+              searchPlaceholder={t("dashboard.searchPlaceholder")}
             />
-            <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => void createNewBase()} disabled={creating}>
-              <Plus size={13} />
-              {t("dashboard.baseCreate")}
-            </button>
           </div>
-        </div>
+        </section>
 
-        <div className="dashboard-hub-db-field">
-          <label>{t("dashboard.baseImportExisting")}</label>
-          <FilePicker
-            value=""
-            onChange={(path) => updateWidgetConfig({ base: path })}
-            paths={baseFiles}
-            placeholder={t("dashboard.baseSelectFile")}
-            searchPlaceholder={t("dashboard.searchPlaceholder")}
-          />
-        </div>
+        <section className="dashboard-hub-db-base-section">
+          <h4 className="dashboard-hub-db-base-section-title">{t("dashboard.baseCreateNew")}</h4>
+          <div className="dashboard-hub-db-field">
+            <label>{t("dashboard.baseCreateEmpty")}</label>
+            <div className="dashboard-hub-db-base-create-row">
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void createNewBase();
+                  }
+                }}
+                placeholder="New Base"
+              />
+              <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => void createNewBase()} disabled={creating}>
+                <Plus size={13} />
+                {t("dashboard.baseCreate")}
+              </button>
+            </div>
+          </div>
 
-        {plugin.hasCapability("base-generation") && <div className="dashboard-hub-db-ai-actions">
-          <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => openAi("create")}>
-            <Sparkles size={13} />
-            {t("dashboard.aiBaseCreate")}
-          </button>
-        </div>}
+          {plugin.hasCapability("base-generation") && <div className="dashboard-hub-db-field">
+            <label>{t("dashboard.baseCreateWithAi")}</label>
+            <div className="dashboard-hub-db-ai-actions">
+              <button type="button" className="dashboard-hub-db-ai-btn" onClick={() => openAi("create")}>
+                <Sparkles size={13} />
+                {t("dashboard.aiBaseCreate")}
+              </button>
+            </div>
+          </div>}
 
+          {kanbanFiles.length > 0 && <div className="dashboard-hub-db-field">
+            <label>{t("dashboard.baseImportKanban")}</label>
+            <p className="dashboard-hub-db-hint">{t("dashboard.baseImportKanbanHint")}</p>
+            <div className="dashboard-hub-db-base-create-row">
+              <FilePicker value={importPath} onChange={setImportPath} paths={kanbanFiles} placeholder={t("dashboard.baseSelectKanban")} />
+              <button type="button" className="dashboard-hub-db-ai-btn" disabled={creating || !importPath} onClick={() => void importKanban()}>
+                <Plus size={13} />
+                {t("dashboard.baseCreate")}
+              </button>
+            </div>
+            <details className="dashboard-hub-db-base-raw">
+              <summary>{t("dashboard.baseImportKanbanLimits")}</summary>
+              <p className="dashboard-hub-db-hint">{t("dashboard.baseImportKanbanLimitsBody")}</p>
+            </details>
+          </div>}
+        </section>
       </div>
     );
   }
@@ -547,7 +606,8 @@ function ManualBaseEditor({
   const fieldNames = fieldInfos.map((field) => field.name);
   const fieldTypeMap = new Map(fieldInfos.map((field) => [field.name, field.type]));
   const sort = activeView.sort?.[0];
-  const viewType = activeView.type === "cards" || activeView.type === "list" ? activeView.type : "table";
+  const viewType = activeView.type;
+  const groupBy = activeView.groupBy as { property?: string; direction?: string } | undefined;
   const properties = baseConfig.properties ?? {};
 
   const setPropertyAlias = (id: string, alias: string) => {
@@ -565,96 +625,115 @@ function ManualBaseEditor({
 
   return (
     <>
-      <div className="dashboard-hub-db-field">
-        <label>{t("dashboard.baseViewName")}</label>
-        <input
-          type="text"
-          value={activeView.name}
-          onChange={(e) => onUpdateView({ name: e.target.value || "View" }, e.target.value || "View")}
-        />
-      </div>
-
-      <div className="dashboard-hub-db-field">
-        <label>{t("dashboard.baseViewType")}</label>
-        <select value={viewType} onChange={(e) => onUpdateView({ type: e.target.value })}>
-          <option value="table">Table</option>
-          <option value="cards">Cards</option>
-          <option value="list">List</option>
-        </select>
-      </div>
-
-      <div className="dashboard-hub-db-field">
-        <label>{viewType === "table" ? t("dashboard.baseColumns") : t("dashboard.baseProperties")}</label>
-        <BaseFieldsEditor
-          order={order}
-          fieldNames={fieldNames}
-          allowAlias={viewType === "table"}
-          aliasFor={(id) => properties[id]?.displayName ?? ""}
-          onOrderChange={(next) => onUpdateView({ order: next.length > 0 ? next : undefined })}
-          onAliasChange={setPropertyAlias}
-        />
-      </div>
-
-      {viewType === "cards" && (
-        <BaseCardOptions view={activeView} fieldNames={fieldNames} onUpdateView={onUpdateView} />
-      )}
-
-      {viewType === "list" && (
-        <label className="dashboard-hub-db-kanban-checkbox">
+      <section className="dashboard-hub-db-base-section">
+        <h4 className="dashboard-hub-db-base-section-title">{t("dashboard.baseSectionDisplay")}</h4>
+        <div className="dashboard-hub-db-field">
+          <label>{t("dashboard.baseViewName")}</label>
           <input
-            type="checkbox"
-            checked={activeView.indentProperties === true}
-            onChange={(e) => onUpdateView({ indentProperties: e.target.checked ? true : undefined })}
+            type="text"
+            value={activeView.name}
+            onChange={(e) => onUpdateView({ name: e.target.value || "View" }, e.target.value || "View")}
           />
-          {t("dashboard.baseListIndent")}
-        </label>
-      )}
+        </div>
 
-      <div className="dashboard-hub-db-field">
-        <label>{t("dashboard.baseSort")}</label>
-        <div className="dashboard-hub-db-base-sort-row">
-          <select
-            value={sort?.property ?? ""}
-            onChange={(e) => onUpdateView({ sort: e.target.value ? [{ property: e.target.value, direction: sort?.direction ?? "ASC" }] : undefined })}
-          >
-            <option value="">{t("dashboard.baseNoSort")}</option>
-            {fieldNames.map((field) => <option key={field} value={field}>{field}</option>)}
-          </select>
-          <select
-            value={sort?.direction ?? "ASC"}
-            disabled={!sort?.property}
-            onChange={(e) => onUpdateView({ sort: sort?.property ? [{ property: sort.property, direction: e.target.value === "DESC" ? "DESC" : "ASC" }] : undefined })}
-          >
-            <option value="ASC">{t("dashboard.baseSortAsc")}</option>
-            <option value="DESC">{t("dashboard.baseSortDesc")}</option>
+        <div className="dashboard-hub-db-field">
+          <label>{t("dashboard.baseViewType")}</label>
+          <select value={viewType} onChange={(e) => onUpdateView({ type: e.target.value, ...(e.target.value === "kanban" && !groupBy?.property ? { groupBy: { property: "note.status", direction: "ASC" } } : {}) })}>
+            <option value="table">Table</option>
+            <option value="cards">Cards</option>
+            <option value="list">List</option>
+            <option value="kanban">Kanban</option>
+            {!["table", "cards", "list", "kanban"].includes(viewType) && <option value={viewType}>{viewType}</option>}
           </select>
         </div>
-      </div>
 
-      <div className="dashboard-hub-db-field">
-        <label>{t("dashboard.baseLimit")}</label>
-        <input
-          type="number"
-          min={1}
-          value={activeView.limit ?? ""}
-          onChange={(e) => {
-            const value = Number(e.target.value);
-            onUpdateView({ limit: Number.isFinite(value) && value > 0 ? value : undefined });
-          }}
-          placeholder="50"
-        />
-      </div>
+        {viewType === "kanban" && <div className="dashboard-hub-db-field">
+          <label>{t("dashboard.baseGroupBy")}</label>
+          <p className="dashboard-hub-db-hint">{t("dashboard.baseKanbanHint")}</p>
+          <select value={groupBy?.property ?? ""} onChange={(e) => onUpdateView({ groupBy: e.target.value ? { ...groupBy, property: e.target.value, direction: groupBy?.direction ?? "ASC" } : undefined, groupOrder: undefined })}>
+            <option value="">{t("dashboard.baseSelectGroup")}</option>
+            {groupBy?.property && !fieldNames.includes(groupBy.property) && <option value={groupBy.property}>{groupBy.property}</option>}
+            {fieldNames.map((field) => <option value={field} key={field}>{field}</option>)}
+          </select>
+        </div>}
 
-      <div className="dashboard-hub-db-field">
-        <label>{t("dashboard.baseFilters")}</label>
-        <BaseFilterEditor
-          filters={activeView.filters}
-          fieldNames={fieldNames}
-          fieldTypeMap={fieldTypeMap}
-          folderOptions={folderOptions}
-          onChange={(next) => onUpdateView({ filters: next })}
-        />
-      </div>
+        <div className="dashboard-hub-db-field">
+          <label>{viewType === "table" ? t("dashboard.baseColumns") : viewType === "kanban" ? t("dashboard.baseCardFields") : t("dashboard.baseProperties")}</label>
+          {viewType === "kanban" && <p className="dashboard-hub-db-hint">{t("dashboard.baseCardFieldsHint")}</p>}
+          <BaseFieldsEditor
+            order={order}
+            fieldNames={fieldNames}
+            allowAlias={viewType === "table"}
+            aliasFor={(id) => properties[id]?.displayName ?? ""}
+            onOrderChange={(next) => onUpdateView({ order: next.length > 0 ? next : undefined })}
+            onAliasChange={setPropertyAlias}
+          />
+        </div>
+
+        {viewType === "cards" && (
+          <BaseCardOptions view={activeView} fieldNames={fieldNames} onUpdateView={onUpdateView} />
+        )}
+
+        {viewType === "list" && (
+          <label className="dashboard-hub-db-kanban-checkbox">
+            <input
+              type="checkbox"
+              checked={activeView.indentProperties === true}
+              onChange={(e) => onUpdateView({ indentProperties: e.target.checked ? true : undefined })}
+            />
+            {t("dashboard.baseListIndent")}
+          </label>
+        )}
+      </section>
+
+      <section className="dashboard-hub-db-base-section">
+        <h4 className="dashboard-hub-db-base-section-title">{t("dashboard.baseSectionFilter")}</h4>
+        <div className="dashboard-hub-db-field">
+          <label>{t("dashboard.baseFilters")}</label>
+          <BaseFilterEditor
+            filters={activeView.filters}
+            fieldNames={fieldNames}
+            fieldTypeMap={fieldTypeMap}
+            folderOptions={folderOptions}
+            onChange={(next) => onUpdateView({ filters: next })}
+          />
+        </div>
+
+        <div className="dashboard-hub-db-field">
+          <label>{t("dashboard.baseSort")}</label>
+          <div className="dashboard-hub-db-base-sort-row">
+            <select
+              value={sort?.property ?? ""}
+              onChange={(e) => onUpdateView({ sort: e.target.value ? [{ property: e.target.value, direction: sort?.direction ?? "ASC" }] : undefined })}
+            >
+              <option value="">{t("dashboard.baseNoSort")}</option>
+              {fieldNames.map((field) => <option key={field} value={field}>{field}</option>)}
+            </select>
+            <select
+              value={sort?.direction ?? "ASC"}
+              disabled={!sort?.property}
+              onChange={(e) => onUpdateView({ sort: sort?.property ? [{ property: sort.property, direction: e.target.value === "DESC" ? "DESC" : "ASC" }] : undefined })}
+            >
+              <option value="ASC">{t("dashboard.baseSortAsc")}</option>
+              <option value="DESC">{t("dashboard.baseSortDesc")}</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="dashboard-hub-db-field">
+          <label>{t("dashboard.baseLimit")}</label>
+          <input
+            type="number"
+            min={1}
+            value={activeView.limit ?? ""}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              onUpdateView({ limit: Number.isFinite(value) && value > 0 ? value : undefined });
+            }}
+            placeholder="50"
+          />
+        </div>
+      </section>
 
       <details className="dashboard-hub-db-base-raw">
         <summary>{t("dashboard.baseRawYaml")}</summary>
