@@ -4191,3 +4191,95 @@
 .is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-iconbtn.is-active {
   color: var(--interactive-accent);
 }
+
+/* @ai lookup panel inside the Timeline composer */
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-iconbtn.is-open {
+  background: var(--background-modifier-hover);
+  color: var(--interactive-accent);
+}
+.dashboard-hub-db-timeline-ai-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  font-size: var(--font-ui-smaller);
+}
+.dashboard-hub-db-timeline-ai-panel.is-loading,
+.dashboard-hub-db-timeline-ai-panel p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.dashboard-hub-db-timeline-ai-panel p.mod-warning {
+  color: var(--text-warning);
+}
+.dashboard-hub-db-timeline-ai-row {
+  display: grid;
+  grid-template-columns: 6.5em minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+.dashboard-hub-db-timeline-ai-row > span {
+  padding-top: 4px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.dashboard-hub-db-timeline-ai-row select {
+  min-width: 0;
+  max-width: 100%;
+  font-size: var(--font-ui-smaller);
+}
+.dashboard-hub-db-timeline-ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.dashboard-hub-db-timeline-ai-panel button.dashboard-hub-db-timeline-ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+.dashboard-hub-db-timeline-ai-panel button.dashboard-hub-db-timeline-ai-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-hub-db-timeline-ai-panel button.dashboard-hub-db-timeline-ai-chip:hover:not(:disabled) {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.dashboard-hub-db-timeline-ai-panel button.dashboard-hub-db-timeline-ai-chip.is-on {
+  border-color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+.dashboard-hub-db-timeline-ai-panel button.dashboard-hub-db-timeline-ai-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-iconbtn.is-open {
+  color: var(--interactive-accent);
+}
+.is-mobile .dashboard-hub-db-timeline-ai-panel button.dashboard-hub-db-timeline-ai-chip {
+  height: 32px;
+  padding: 0 12px;
+}
+.is-mobile .dashboard-hub-db-timeline-ai-panel {
+  max-height: 30dvh;
+}
