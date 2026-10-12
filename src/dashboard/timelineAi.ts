@@ -1,4 +1,4 @@
-import type { DashboardHubPlugin, TimelineAnswerRequest } from "src/plugin";
+import type { DashboardHubPlugin, TimelineAiSettings, TimelineAnswerRequest } from "src/plugin";
 import { TFile, type Vault } from "obsidian";
 import { appendPost, postBlock, splitPosts, timelineThreads, type TimelinePost } from "./timelineThreads";
 import { ensureVaultFolder } from "./dashboardFile";
@@ -9,8 +9,10 @@ export function hasAiMention(text: string): boolean {
   return /(^|[^\p{L}\p{N}_@])@ai(?=$|[^\p{L}\p{N}_-])/iu.test(text);
 }
 
+type AnswerPlugin = Pick<DashboardHubPlugin, "listModels"> & { settings?: { timelineAi?: TimelineAiSettings } };
+
 export async function generateTimelineAnswer(
-  plugin: Pick<DashboardHubPlugin, "listModels">,
+  plugin: AnswerPlugin,
   posts: TimelinePost[],
   question: TimelinePost,
 ): Promise<string> {
@@ -22,6 +24,12 @@ export async function generateTimelineAnswer(
     content: post.content,
   }));
   const request: TimelineAnswerRequest = { modelId, messages, question: question.content };
+  const lookup = plugin.settings?.timelineAi;
+  if (lookup?.allowVaultRead) request.allowVaultRead = true;
+  if (lookup?.search === "web") request.webSearch = true;
+  else if (lookup?.search.startsWith("rag:")) request.ragSetting = lookup.search.slice(4);
+  if (lookup?.mcpServers?.length) request.mcpServers = [...lookup.mcpServers];
+  if (lookup?.skills?.length) request.skills = [...lookup.skills];
   let answer: string;
   if (integration.answerTimeline) {
     answer = await integration.answerTimeline(request);
@@ -40,7 +48,7 @@ export async function generateTimelineAnswer(
 /** Read the complete thread and save the answer as a reply in today's file. */
 export async function replyToTimelinePost(
   vault: Vault,
-  plugin: Pick<DashboardHubPlugin, "listModels">,
+  plugin: AnswerPlugin,
   name: string,
   baseDirectory: string,
   question: TimelinePost,

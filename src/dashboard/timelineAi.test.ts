@@ -45,6 +45,16 @@ describe("Timeline @ai replies", () => {
     expect(integration.rewriteText).not.toHaveBeenCalled();
   });
 
+  it("passes the configured Vault and search options to the answer API", async () => {
+    const answerTimeline = vi.fn(async () => "Answer");
+    const base = provider({ answerTimeline }).plugin;
+    await generateTimelineAnswer({ ...base, settings: { timelineAi: { allowVaultRead: true, search: "rag:Notes" } } }, [question], question);
+    expect(answerTimeline).toHaveBeenLastCalledWith(expect.objectContaining({ allowVaultRead: true, ragSetting: "Notes" }));
+    await generateTimelineAnswer({ ...base, settings: { timelineAi: { allowVaultRead: false, search: "web" } } }, [question], question);
+    expect(answerTimeline).toHaveBeenLastCalledWith(expect.not.objectContaining({ allowVaultRead: true }));
+    expect(answerTimeline).toHaveBeenLastCalledWith(expect.objectContaining({ webSearch: true }));
+  });
+
   it("uses existing v1 Hub text generation with an answer instruction and valid model", async () => {
     const { plugin, integration } = provider();
     plugin.listModels.mockResolvedValueOnce({ integration, models: [model], defaultModelId: "removed-model" });

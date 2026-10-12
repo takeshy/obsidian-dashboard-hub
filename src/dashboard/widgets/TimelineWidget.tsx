@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, CornerDownRight, ExternalLink, Image, Loader2, MessageSquare, PenLine, Pin, Plus, Reply, Search, Send, Sparkles, Trash2, X } from "lucide-react";
-import { Notice, Platform, TFile } from "obsidian";
+import { ChevronDown, ChevronUp, CornerDownRight, ExternalLink, Image, Loader2, MessageSquare, PenLine, Pin, Plus, Reply, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { Menu, Notice, Platform, TFile } from "obsidian";
 import { t } from "src/i18n";
 import { DASHBOARD_FOLDER, type WidgetContext } from "../types";
+import type { TimelineAiSettings } from "src/plugin";
 import { ensureVaultFolder } from "../dashboardFile";
 import ObsidianMarkdown from "./ObsidianMarkdown";
 import { TimelineLinkPreviewModal } from "./TimelineLinkPreviewModal";
-import { AiGenerationModal } from "src/ui/AiGenerationModal";
 import { hasAiMention, replyToTimelinePost } from "../timelineAi";
 import { splitPosts, appendPost, replacePostContent, setPostPinnedContent, deletePostContent, timelineThreads, selectTimelineThreads, postBlock, type TimelinePost } from "../timelineThreads";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
@@ -54,6 +54,10 @@ const IMAGE_EXT_BY_MIME: Record<string, string> = {
   "image/webp": "webp",
   "image/svg+xml": "svg",
 };
+
+function isAiLookupActive(settings: TimelineAiSettings | undefined): boolean {
+  return Boolean(settings && (settings.allowVaultRead || settings.search || settings.mcpServers.length > 0 || settings.skills.length > 0));
+}
 
 function sanitizeName(value: string): string {
   return value
@@ -776,33 +780,58 @@ export default function TimelineWidget({
     await refresh();
   };
 
-  const openAiRewrite = (target: "draft" | "edit") => {
+  const [aiLookupActive, setAiLookupActive] = useState(() => isAiLookupActive(ctx?.plugin.settings.timelineAi));
+
+  const openAiLookupMenu = async (event: React.MouseEvent) => {
     if (!ctx) return;
-    const content = target === "draft" ? draft : editDraft;
-    new AiGenerationModal(ctx.app, {
-      plugin: ctx.plugin,
-      capability: "text-rewrite",
-      title: t("dashboard.timelineAiEdit"),
-      description: "Describe how the Timeline text should be rewritten.",
-      original: content,
-      generate: (request) => ctx.plugin.rewriteText({
-        modelId: request.modelId,
-        content,
-        instruction: request.instruction,
-        previousResult: request.previousResult,
-        context: "timeline",
-        abortSignal: request.abortSignal,
-      }),
-      onApply: (next) => {
-        if (target === "draft") setDraft(next);
-        else setEditDraft(next);
-        window.setTimeout(() => {
-          const textarea = target === "draft" ? textareaRef.current : editTextareaRef.current;
-          resizeTextarea(textarea);
-          textarea?.focus();
-        }, 0);
-      },
-    }).open();
+    const plugin = ctx.plugin;
+    const position = { x: event.clientX, y: event.clientY };
+    const choices = await plugin.getTimelineAiChoices();
+    const menu = new Menu();
+    const update = (patch: Partial<TimelineAiSettings>) => {
+      void plugin.setTimelineAi(patch).then(() => setAiLookupActive(isAiLookupActive(plugin.settings.timelineAi)));
+    };
+    if (!choices) {
+      menu.addItem((item) => item.setTitle(t("settings.timelineAiNoHub")).setDisabled(true));
+    } else {
+      const { integration, models, modelId, options } = choices;
+      const current = plugin.settings.timelineAi;
+      menu.addItem((item) => item.setTitle(`${t("settings.timelineAiModel")}: ${models.find((model) => model.id === modelId)?.name ?? "-"}`)
+        .setIcon("bot").setDisabled(true));
+      if (!integration.answerTimeline) {
+        menu.addItem((item) => item.setTitle(t("settings.timelineAiLegacyHub", { name: integration.name })).setDisabled(true));
+      } else {
+        menu.addSeparator();
+        menu.addItem((item) => item.setTitle(t("settings.timelineAiVaultRead")).setIcon("folder-open")
+          .setChecked(options.vaultRead && current.allowVaultRead).setDisabled(!options.vaultRead)
+          .onClick(() => update({ allowVaultRead: !current.allowVaultRead })));
+        menu.addSeparator();
+        const searchItem = (value: string, title: string, icon: string) => menu.addItem((item) => item.setTitle(title).setIcon(icon)
+          .setChecked(current.search === value).onClick(() => update({ search: value })));
+        searchItem("", `${t("settings.timelineAiSearch")}: ${t("settings.timelineAiSearchNone")}`, "search-x");
+        if (options.webSearch) searchItem("web", t("settings.timelineAiSearchWeb"), "globe");
+        for (const name of options.ragSettings) searchItem(`rag:${name}`, `RAG: ${name}`, "database");
+        const mcpServers = options.mcpServers ?? [];
+        if (mcpServers.length > 0) menu.addSeparator();
+        for (const server of mcpServers) {
+          const enabled = current.mcpServers.includes(server);
+          menu.addItem((item) => item.setTitle(`MCP: ${server}`).setIcon("plug").setChecked(enabled).onClick(() => {
+            const rest = current.mcpServers.filter((name) => name !== server);
+            update({ mcpServers: enabled ? rest : [...rest, server] });
+          }));
+        }
+        const skills = options.skills ?? [];
+        if (skills.length > 0) menu.addSeparator();
+        for (const skill of skills) {
+          const enabled = current.skills.includes(skill.id);
+          menu.addItem((item) => item.setTitle(`Skill: ${skill.name}`).setIcon("book-open").setChecked(enabled).onClick(() => {
+            const rest = current.skills.filter((id) => id !== skill.id);
+            update({ skills: enabled ? rest : [...rest, skill.id] });
+          }));
+        }
+      }
+    }
+    menu.showAtPosition(position);
   };
 
   if (!ctx) return null;
@@ -893,8 +922,8 @@ export default function TimelineWidget({
           <X size={14} />
         </button>
         <div className="dashboard-hub-db-timeline-composer-primary-actions">
-          {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => openAiRewrite("draft")} title={t("dashboard.timelineAiEdit")}>
-            <Sparkles size={14} />
+          {ctx.plugin.hasCapability("timeline-reply") && <button type="button" className={`dashboard-hub-db-timeline-iconbtn${aiLookupActive ? " is-active" : ""}`} {...keepFocusProps} onClick={(e) => void openAiLookupMenu(e)} title={t("settings.timelineAiHeading")}>
+            <SlidersHorizontal size={14} />
           </button>}
           <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => inputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
             <Image size={14} />
@@ -1023,9 +1052,6 @@ export default function TimelineWidget({
                         <X size={14} />
                       </button>
                       <div className="dashboard-hub-db-timeline-composer-primary-actions">
-                        {ctx.plugin.hasCapability("text-rewrite") && <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => openAiRewrite("edit")} title={t("dashboard.timelineAiEdit")}>
-                          <Sparkles size={14} />
-                        </button>}
                         <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => editInputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
                           <Image size={14} />
                         </button>

@@ -4182,3 +4182,12 @@
 .dashboard-hub-db-timeline button.dashboard-hub-db-timeline-new:hover:not(:disabled) {
   background: var(--interactive-accent-hover);
 }
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-iconbtn.is-active {
+  color: var(--interactive-accent);
+}
+.dashboard-hub-setting-indent {
+  padding-left: 16px;
+}
+.is-mobile .dashboard-hub-db-timeline-composer.is-mobile-modal .dashboard-hub-db-timeline-iconbtn.is-active {
+  color: var(--interactive-accent);
+}

@@ -8,7 +8,7 @@ import {
   type EventRef,
   type SettingDefinitionItem,
 } from "obsidian";
-import { initLocale } from "src/i18n";
+import { initLocale, t } from "src/i18n";
 import { cryptoCache } from "src/core/cryptoCache";
 import { DashboardView, DASHBOARD_VIEW_TYPE } from "src/ui/DashboardView";
 import { KanbanView, KANBAN_VIEW_TYPE } from "src/ui/KanbanView";
@@ -43,6 +43,24 @@ export interface DashboardHubSettings {
   preferredIntegrationId: string;
   preferredModels: Record<string, string>;
   aiInstructionHistory: Partial<Record<DashboardCapability, string[]>>;
+  timelineAi: TimelineAiSettings;
+}
+
+/** How @ai answers may look things up. `search` is "", "web" or "rag:<setting name>". */
+export interface TimelineAiSettings {
+  allowVaultRead: boolean;
+  search: string;
+  /** MCP server names the Hub should connect for @ai answers. */
+  mcpServers: string[];
+  /** Skill ids (the Hub's skill folder paths) whose instructions apply to @ai answers. */
+  skills: string[];
+}
+
+export interface TimelineAiChoices {
+  integration: DashboardAiIntegration;
+  models: DashboardAiModel[];
+  modelId: string;
+  options: TimelineAnswerOptions;
 }
 
 export interface DashboardAiIntegration {
@@ -56,6 +74,8 @@ export interface DashboardAiIntegration {
   runWorkflow?: (request: { workflowPath: string; outputVariable?: string; abortSignal?: AbortSignal }) => Promise<string>;
   generateBase?: (request: BaseGenerationRequest) => Promise<string>;
   answerTimeline?: (request: TimelineAnswerRequest) => Promise<string>;
+  /** What answerTimeline can use with the given model. */
+  getTimelineAnswerOptions?: (modelId: string) => Promise<TimelineAnswerOptions>;
   rewriteText?: (request: RewriteRequest) => Promise<string>;
   generateWorkflow?: (request: WorkflowGenerationRequest) => Promise<string>;
 }
@@ -80,6 +100,25 @@ export interface TimelineAnswerRequest {
   modelId: string;
   messages: { role: "user" | "assistant"; content: string }[];
   question: string;
+  /** Allow read-only Vault tools. */
+  allowVaultRead?: boolean;
+  /** Use the provider's web search. Never combined with ragSetting. */
+  webSearch?: boolean;
+  /** Name of the Hub's RAG setting to search. */
+  ragSetting?: string;
+  /** Names of the Hub's MCP servers to connect. */
+  mcpServers?: string[];
+  /** Ids of the Hub's Skills to follow. */
+  skills?: string[];
+  abortSignal?: AbortSignal;
+}
+
+export interface TimelineAnswerOptions {
+  vaultRead: boolean;
+  webSearch: boolean;
+  ragSettings: string[];
+  mcpServers?: string[];
+  skills?: { id: string; name: string }[];
 }
 
 export interface RewriteRequest {
@@ -110,6 +149,7 @@ const DEFAULT_SETTINGS: DashboardHubSettings = {
   preferredIntegrationId: "",
   preferredModels: {},
   aiInstructionHistory: {},
+  timelineAi: { allowVaultRead: false, search: "", mcpServers: [], skills: [] },
 };
 
 export class DashboardHubPlugin extends Plugin {
@@ -186,6 +226,7 @@ export class DashboardHubPlugin extends Plugin {
       activityTimelineName: sanitizeTimelineName(current.activityTimelineName ?? "Timeline"),
       preferredModels: { ...DEFAULT_SETTINGS.preferredModels, ...(current.preferredModels ?? {}) },
       aiInstructionHistory: { ...DEFAULT_SETTINGS.aiInstructionHistory, ...(current.aiInstructionHistory ?? {}) },
+      timelineAi: { ...DEFAULT_SETTINGS.timelineAi, ...(current.timelineAi ?? {}) },
     };
     // Secret files carry their own encrypted private key and salt. Remove the
     // obsolete plugin-level key copy left by early Dashboard Hub builds.
@@ -289,6 +330,28 @@ export class DashboardHubPlugin extends Plugin {
     }
     const defaultModelId = this.settings.preferredModels[`${integration.id}:${capability}`] || providerDefault;
     return { integration, models: models.filter((model) => model.capabilities.text), defaultModelId };
+  }
+
+  async setTimelineAi(patch: Partial<TimelineAiSettings>): Promise<void> {
+    this.settings.timelineAi = { ...this.settings.timelineAi, ...patch };
+    await this.saveSettings();
+  }
+
+  /** Model and lookup options for @ai answers, or null when no Hub can answer. */
+  async getTimelineAiChoices(): Promise<TimelineAiChoices | null> {
+    let listed: Awaited<ReturnType<DashboardHubPlugin["listModels"]>>;
+    try {
+      listed = await this.listModels("timeline-reply");
+    } catch {
+      return null;
+    }
+    const { integration, models } = listed;
+    const modelId = models.find((model) => model.id === listed.defaultModelId)?.id || models[0]?.id || "";
+    const none: TimelineAnswerOptions = { vaultRead: false, webSearch: false, ragSettings: [], mcpServers: [], skills: [] };
+    const options = integration.answerTimeline && integration.getTimelineAnswerOptions && modelId
+      ? await integration.getTimelineAnswerOptions(modelId).catch(() => none)
+      : none;
+    return { integration, models, modelId, options };
   }
 
   rememberModel(integrationId: string, capability: DashboardCapability, modelId: string): void {
@@ -449,6 +512,7 @@ class DashboardHubSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    this.hide();
     this.containerEl.empty();
     new Setting(this.containerEl)
       .setName("Base directory")
@@ -474,5 +538,94 @@ class DashboardHubSettingTab extends PluginSettingTab {
           });
       });
 
+    new Setting(this.containerEl).setName(t("settings.timelineAiHeading")).setHeading();
+    this.containerEl.createEl("p", { cls: "setting-item-description", text: t("settings.timelineAiDesc") });
+    this.renderTimelineAi(this.containerEl.createDiv());
+  }
+
+  hide(): void {
+    if (this.integrationsRef) this.app.workspace.offref(this.integrationsRef);
+    this.integrationsRef = null;
+  }
+
+  private integrationsRef: EventRef | null = null;
+
+  private renderTimelineAi(container: HTMLElement): void {
+    const plugin = this.dashboardPlugin;
+    if (!this.integrationsRef) {
+      const workspace = this.app.workspace as unknown as { on: (name: string, callback: () => void) => EventRef };
+      this.integrationsRef = workspace.on("dashboard-hub:integrations-changed", () => this.renderTimelineAi(container));
+    }
+    const render = async () => {
+      const choices = await plugin.getTimelineAiChoices();
+      if (!choices) {
+        container.empty();
+        container.createEl("p", { cls: "setting-item-description", text: t("settings.timelineAiNoHub") });
+        return;
+      }
+      const { integration, models, modelId, options } = choices;
+      const current = plugin.settings.timelineAi;
+      container.empty();
+
+      new Setting(container)
+        .setName(t("settings.timelineAiModel"))
+        .setDesc(integration.name)
+        .addDropdown((dropdown) => {
+          for (const model of models) dropdown.addOption(model.id, model.name);
+          dropdown.setValue(modelId).onChange((value) => {
+            plugin.rememberModel(integration.id, "timeline-reply", value);
+            void render();
+          });
+        });
+
+      if (!integration.answerTimeline) {
+        container.createEl("p", { cls: "setting-item-description mod-warning", text: t("settings.timelineAiLegacyHub", { name: integration.name }) });
+        return;
+      }
+
+      new Setting(container)
+        .setName(t("settings.timelineAiVaultRead"))
+        .setDesc(options.vaultRead ? t("settings.timelineAiVaultReadDesc") : t("settings.timelineAiUnsupported"))
+        .addToggle((toggle) => {
+          toggle.setValue(options.vaultRead && current.allowVaultRead).setDisabled(!options.vaultRead)
+            .onChange((value) => void plugin.setTimelineAi({ allowVaultRead: value }));
+        });
+
+      const searchValues = [
+        ...(options.webSearch ? ["web"] : []),
+        ...options.ragSettings.map((name) => `rag:${name}`),
+      ];
+      new Setting(container)
+        .setName(t("settings.timelineAiSearch"))
+        .setDesc(searchValues.length > 0 ? t("settings.timelineAiSearchDesc") : t("settings.timelineAiUnsupported"))
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", t("settings.timelineAiSearchNone"));
+          if (options.webSearch) dropdown.addOption("web", t("settings.timelineAiSearchWeb"));
+          for (const name of options.ragSettings) dropdown.addOption(`rag:${name}`, `RAG: ${name}`);
+          dropdown.setValue(searchValues.includes(current.search) ? current.search : "")
+            .setDisabled(searchValues.length === 0)
+            .onChange((value) => void plugin.setTimelineAi({ search: value }));
+        });
+
+      const toggleList = (heading: string, desc: string, items: { id: string; name: string }[], key: "mcpServers" | "skills") => {
+        if (items.length === 0) return;
+        new Setting(container).setName(heading).setDesc(desc);
+        for (const entry of items) {
+          new Setting(container)
+            .setName(entry.name)
+            .setClass("dashboard-hub-setting-indent")
+            .addToggle((toggle) => {
+              toggle.setValue(current[key].includes(entry.id)).onChange((value) => {
+                const selected = plugin.settings.timelineAi[key].filter((id) => id !== entry.id);
+                void plugin.setTimelineAi({ [key]: value ? [...selected, entry.id] : selected });
+              });
+            });
+        }
+      };
+      toggleList(t("settings.timelineAiMcp"), t("settings.timelineAiMcpDesc"), (options.mcpServers ?? []).map((name) => ({ id: name, name })), "mcpServers");
+      toggleList(t("settings.timelineAiSkills"), t("settings.timelineAiSkillsDesc"), options.skills ?? [], "skills");
+    };
+    void render();
   }
 }
+
