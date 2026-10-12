@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TFile, TFolder, type Vault } from "obsidian";
 import { appendTimelineEntry, moveCalendarEvent, readTimelineEntriesForDay, sanitizeTimelineName } from "./timelineEvents";
 
@@ -36,6 +36,7 @@ function makeVault(initial: Record<string, string> = {}) {
     create: async (path: string, content: string) => { contents.set(path, content); return file(path); },
     read: async (target: TFile) => { readPaths.push(target.path); return contents.get(target.path) ?? ""; },
     modify: async (target: TFile, content: string) => { contents.set(target.path, content); },
+    process: async (target: TFile, fn: (content: string) => string) => { contents.set(target.path, fn(contents.get(target.path) ?? "")); },
   } as unknown as Vault;
   return { vault, contents, readPaths };
 }
@@ -53,6 +54,18 @@ describe("Timeline activity events", () => {
     expect(content).toContain("Memo created");
     expect(content).toContain("Kanban moved");
     expect(content).toContain("\n\n---\n\n");
+  });
+
+  it("gives activity posts distinct IDs even within the same millisecond", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 9, 12, 10));
+      const { vault, contents } = makeVault();
+      await appendTimelineEntry(vault, "Timeline", "First");
+      await appendTimelineEntry(vault, "Timeline", "Second");
+      const ids = [...[...contents.values()][0].matchAll(/^id: (.+)$/gm)].map(match => match[1]);
+      expect(new Set(ids).size).toBe(2);
+    } finally { vi.useRealTimers(); }
   });
 
   it("stores entries below the configured base directory", async () => {

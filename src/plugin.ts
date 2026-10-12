@@ -55,6 +55,7 @@ export interface DashboardAiIntegration {
   askChatAboutSelection?: (request: { text: string; sourcePath?: string }) => void | Promise<void>;
   runWorkflow?: (request: { workflowPath: string; outputVariable?: string; abortSignal?: AbortSignal }) => Promise<string>;
   generateBase?: (request: BaseGenerationRequest) => Promise<string>;
+  answerTimeline?: (request: TimelineAnswerRequest) => Promise<string>;
   rewriteText?: (request: RewriteRequest) => Promise<string>;
   generateWorkflow?: (request: WorkflowGenerationRequest) => Promise<string>;
 }
@@ -73,6 +74,12 @@ export interface BaseGenerationRequest {
   allowVaultRead: boolean;
   previousResult?: string;
   abortSignal?: AbortSignal;
+}
+
+export interface TimelineAnswerRequest {
+  modelId: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  question: string;
 }
 
 export interface RewriteRequest {
@@ -95,7 +102,7 @@ export interface WorkflowGenerationRequest {
   abortSignal?: AbortSignal;
 }
 
-export type DashboardCapability = "chat" | "workflow" | "base-generation" | "text-rewrite" | "workflow-generation";
+export type DashboardCapability = "chat" | "workflow" | "base-generation" | "text-rewrite" | "workflow-generation" | "timeline-reply";
 
 const DEFAULT_SETTINGS: DashboardHubSettings = {
   baseDirectory: DASHBOARD_FOLDER,
@@ -252,6 +259,7 @@ export class DashboardHubPlugin extends Plugin {
     if (capability === "chat") return Boolean(integration.openChatWithDraft || integration.askChatAboutSelection);
     if (capability === "workflow") return Boolean(integration.runWorkflow);
     if (capability === "base-generation") return Boolean(integration.generateBase);
+    if (capability === "timeline-reply") return Boolean(integration.answerTimeline || integration.rewriteText);
     if (capability === "text-rewrite") return Boolean(integration.rewriteText);
     return Boolean(integration.generateWorkflow);
   }

@@ -54,11 +54,13 @@ export async function appendTimelineEntry(vault: Vault, timelineName: string, bo
   await ensureVaultFolder(vault, dir);
   const path = `${dir}/${dayKey(date)}.md`;
   const now = new Date();
-  const block = `${now.toISOString()}\nid: timeline-${now.getTime().toString(36)}\n\n${body.trim()}`;
+  const block = `${now.toISOString()}\nid: timeline-${crypto.randomUUID()}\n\n${body.trim()}`;
   const existing = vault.getAbstractFileByPath(path);
   if (existing instanceof TFile) {
-    const current = (await vault.read(existing)).trim();
-    await vault.modify(existing, `${current}${current ? "\n\n---\n\n" : ""}${block}\n`);
+    await vault.process(existing, content => {
+      const current = content.trim();
+      return `${current}${current ? "\n\n---\n\n" : ""}${block}\n`;
+    });
   } else await vault.create(path, `${block}\n`);
 }
 

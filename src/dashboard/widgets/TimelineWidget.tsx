@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, ExternalLink, Image, Loader2, PenLine, Pin, Plus, Search, Send, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CornerDownRight, ExternalLink, Image, Loader2, MessageSquare, PenLine, Pin, Plus, Reply, Search, Send, Sparkles, Trash2, X } from "lucide-react";
 import { Notice, Platform, TFile } from "obsidian";
 import { t } from "src/i18n";
 import { DASHBOARD_FOLDER, type WidgetContext } from "../types";
@@ -8,6 +8,8 @@ import { ensureVaultFolder } from "../dashboardFile";
 import ObsidianMarkdown from "./ObsidianMarkdown";
 import { TimelineLinkPreviewModal } from "./TimelineLinkPreviewModal";
 import { AiGenerationModal } from "src/ui/AiGenerationModal";
+import { hasAiMention, replyToTimelinePost } from "../timelineAi";
+import { splitPosts, appendPost, replacePostContent, setPostPinnedContent, deletePostContent, timelineThreads, selectTimelineThreads, postBlock, type TimelinePost } from "../timelineThreads";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
 
 interface TimelineConfig {
@@ -15,21 +17,6 @@ interface TimelineConfig {
   latestCount?: number;
   collapseLineLimit?: number;
   collapseCharLimit?: number;
-}
-
-interface TimelinePost {
-  id: string;
-  createdAt: string;
-  pinned: boolean;
-  content: string;
-  index: number;
-  sourcePath: string;
-  sourceFile: TFile;
-}
-
-interface ParsedPostBlock {
-  raw: string;
-  post: TimelinePost | null;
 }
 
 interface PendingImage {
@@ -56,11 +43,6 @@ interface WikiSuggestionPosition {
   width: number;
 }
 
-const POST_MARKER_RE = /<!--\s*timeline-post:\s*([^>]+?)\s*-->/;
-const POST_SEPARATOR_RE = /^\s*---\s*\r?\n(?=(?:<!--\s*timeline-post:|\d{4}-\d{2}-\d{2}T))/m;
-const ISO_DATE_LINE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
-const POST_ID_RE = /^id:\s*([A-Za-z0-9_-]+)\s*$/i;
-const PINNED_RE = /^pinned:\s*(true|false)\s*$/i;
 const COLLAPSE_LINE_LIMIT = 8;
 const COLLAPSE_CHAR_LIMIT = 440;
 const COLLAPSE_ESTIMATED_CHARS_PER_LINE = 34;
@@ -214,91 +196,8 @@ function textareaCaretMenuPosition(textarea: HTMLTextAreaElement, cursorPos: num
   };
 }
 
-function parsePostBlock(raw: string, index: number, sourcePath: string, sourceFile: TFile): TimelinePost | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const marker = trimmed.match(POST_MARKER_RE);
-  const withoutMarker = trimmed.replace(POST_MARKER_RE, "").trim();
-  const lines = withoutMarker.split(/\r?\n/);
-  const firstLine = lines[0]?.trim() ?? "";
-  const dateFromLine = ISO_DATE_LINE_RE.test(firstLine) ? firstLine : "";
-  const createdAt = marker?.[1]?.trim() || dateFromLine || new Date(0).toISOString();
-  const bodyStart = dateFromLine ? 1 : 0;
-  const maybeId = lines[bodyStart]?.trim() ?? "";
-  const idMatch = maybeId.match(POST_ID_RE);
-  const maybePinned = lines[idMatch ? bodyStart + 1 : bodyStart]?.trim() ?? "";
-  const pinnedMatch = maybePinned.match(PINNED_RE);
-  const contentStart = (idMatch ? bodyStart + 1 : bodyStart) + (pinnedMatch ? 1 : 0);
-  const body = lines.slice(contentStart).join("\n").trim();
-  if (!body) return null;
-  return {
-    id: idMatch?.[1] || `${createdAt}-${index}`,
-    createdAt,
-    pinned: pinnedMatch?.[1]?.toLowerCase() === "true",
-    content: body,
-    index,
-    sourcePath,
-    sourceFile,
-  };
-}
-
-function parsePostBlocks(content: string, sourcePath: string, sourceFile: TFile): ParsedPostBlock[] {
-  return content
-    .split(POST_SEPARATOR_RE)
-    .map((raw, index) => ({ raw: raw.trim(), post: parsePostBlock(raw, index, sourcePath, sourceFile) }))
-    .filter((block) => block.raw);
-}
-
-function splitPosts(content: string, sourcePath: string, sourceFile: TFile): TimelinePost[] {
-  return parsePostBlocks(content, sourcePath, sourceFile)
-    .map((block) => block.post)
-    .filter((post): post is TimelinePost => post !== null);
-}
-
-function appendPost(content: string, postBlock: string): string {
-  const current = content.trim();
-  if (!current) return `${postBlock}\n`;
-  return `${current}\n\n---\n\n${postBlock}\n`;
-}
-
-function serializeBlocks(blocks: ParsedPostBlock[]): string {
-  return blocks.map((block) => block.raw.trim()).filter(Boolean).join("\n\n---\n\n") + "\n";
-}
-
-function replacePostContent(content: string, file: TFile, postId: string, nextBody: string): string | null {
-  let changed = false;
-  const blocks = parsePostBlocks(content, file.path, file).map((block) => {
-    if (block.post?.id !== postId) return block;
-    changed = true;
-    return {
-      raw: `${block.post.createdAt}\nid: ${block.post.id}${block.post.pinned ? "\npinned: true" : ""}\n\n${nextBody.trim()}`,
-      post: block.post,
-    };
-  });
-  return changed ? serializeBlocks(blocks) : null;
-}
-
-function setPostPinnedContent(content: string, file: TFile, postId: string, pinned: boolean): string | null {
-  let changed = false;
-  const blocks = parsePostBlocks(content, file.path, file).map((block) => {
-    if (block.post?.id !== postId) return block;
-    changed = true;
-    return {
-      raw: `${block.post.createdAt}\nid: ${block.post.id}${pinned ? "\npinned: true" : ""}\n\n${block.post.content}`,
-      post: { ...block.post, pinned },
-    };
-  });
-  return changed ? serializeBlocks(blocks) : null;
-}
-
-function deletePostContent(content: string, file: TFile, postId: string): string | null {
-  const blocks = parsePostBlocks(content, file.path, file);
-  const next = blocks.filter((block) => block.post?.id !== postId);
-  return next.length === blocks.length ? null : serializeBlocks(next);
-}
-
 function uniquePostId(date: Date, currentContent: string, file: TFile): string {
-  const base = postIdFromDate(date);
+  const base = `${postIdFromDate(date)}-${crypto.randomUUID()}`;
   const ids = new Set(splitPosts(currentContent, file.path, file).map((post) => post.id));
   if (!ids.has(base)) return base;
   let suffix = 2;
@@ -363,40 +262,19 @@ async function loadTimelineFiles(ctx: WidgetContext, name: string, limit: number
   const from = filters.from;
   const to = filters.to || filters.from;
   const dayFiles = ctx.app.vault.getMarkdownFiles()
-    .filter((file) => file.path.startsWith(prefix) && !file.path.includes("/attachments/") && /^\d{4}-\d{2}-\d{2}\.md$/.test(file.path.slice(prefix.length)))
-    .filter((file) => {
-      const day = file.path.slice(prefix.length, prefix.length + 10);
-      if (from && day < from) return false;
-      if (to && day > to) return false;
-      return true;
-    })
-    .sort((a, b) => b.path.localeCompare(a.path));
-
+    .filter(file => file.path.startsWith(prefix) && /^\d{4}-\d{2}-\d{2}\.md$/.test(file.path.slice(prefix.length)));
   const posts: TimelinePost[] = [];
   for (const file of dayFiles) {
-    try {
-      const dayPosts = splitPosts(await ctx.app.vault.cachedRead(file), file.path, file).filter((post) => {
-        const postDay = dateKey(new Date(post.createdAt));
-        if (from && postDay < from) return false;
-        if (to && postDay > to) return false;
-        if (word && !post.content.toLowerCase().includes(word)) return false;
-        if (tagFilter.length > 0) {
-          const postTags = new Set(extractPostTags(post.content).map((tag) => tag.toLowerCase()));
-          if (tagFilter.some((tag) => !postTags.has(tag))) return false;
-        }
-        if (filters.pinnedOnly && !post.pinned) return false;
-        return true;
-      });
-      posts.push(...dayPosts);
-      posts.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.index - a.index);
-      if (posts.length >= limit + 1) break;
-    } catch {
-      // Ignore one unreadable day file; the rest of the timeline can still render.
-    }
+    posts.push(...splitPosts(await ctx.app.vault.cachedRead(file), file.path, file));
   }
-  const selected = posts.slice(0, limit);
-  selected.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.index - b.index);
-  return { posts: selected, hasMore: posts.length > limit };
+  return selectTimelineThreads(posts, limit, post => {
+    const postDay = dateKey(new Date(post.createdAt));
+    if (from && postDay < from || to && postDay > to) return false;
+    if (word && !post.content.toLowerCase().includes(word)) return false;
+    const tags = new Set(extractPostTags(post.content).map(tag => tag.toLowerCase()));
+    if (tagFilter.some(tag => !tags.has(tag))) return false;
+    return !filters.pinnedOnly || post.pinned;
+  });
 }
 
 export default function TimelineWidget({
@@ -427,6 +305,10 @@ export default function TimelineWidget({
   const [loading, setLoading] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<TimelinePost | null>(null);
+  const [openThreads, setOpenThreads] = useState<Set<string>>(() => new Set());
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const aiBusyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
   const [draft, setDraft] = useState("");
@@ -494,6 +376,11 @@ export default function TimelineWidget({
   useEffect(() => {
     setLoadedCount(latestCount);
   }, [name, latestCount, filters]);
+
+  useEffect(() => {
+    setReplyTarget(null);
+    setOpenThreads(new Set());
+  }, [name, baseDirectory]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -752,6 +639,7 @@ export default function TimelineWidget({
   };
 
   const closeComposer = () => {
+    setReplyTarget(null);
     setComposerOpen(false);
     setDraft("");
     clearImages(false);
@@ -777,7 +665,7 @@ export default function TimelineWidget({
   );
 
   const submitPost = async () => {
-    if (!ctx || posting) return;
+    if (!ctx || posting || (hasAiMention(draft) && aiBusyRef.current)) return;
     const body = draft.trim();
     if (!body && images.length === 0) return;
     setPosting(true);
@@ -786,22 +674,50 @@ export default function TimelineWidget({
       const now = new Date();
       const path = dayFilePath(name, now, baseDirectory);
       await ensureVaultFolder(ctx.app.vault, timelineDir(name, baseDirectory));
-      const existing = ctx.app.vault.getAbstractFileByPath(path);
-      const file = existing instanceof TFile ? existing : await ctx.app.vault.create(path, "");
+      let existing = ctx.app.vault.getAbstractFileByPath(path);
+      if (!(existing instanceof TFile)) {
+        try { existing = await ctx.app.vault.create(path, ""); }
+        catch (err) { existing = ctx.app.vault.getAbstractFileByPath(path); if (!(existing instanceof TFile)) throw err; }
+      }
+      const file = existing as TFile;
       const current = await ctx.app.vault.read(file);
       const id = uniquePostId(now, current, file);
       const imageLines = await Promise.all(images.map(async (img, index) => `![[${await savePostImage(now, id, img.file, index)}]]`));
       const nextBody = [body, ...imageLines].filter(Boolean).join("\n\n");
-      const block = `${now.toISOString()}\nid: ${id}\n\n${nextBody}`;
-      await ctx.app.vault.modify(file, appendPost(current, block));
+      const post: TimelinePost = {
+        id, createdAt: now.toISOString(), pinned: false, content: nextBody, metadata: {},
+        rootId: replyTarget?.rootId || id, replyTo: replyTarget?.id || "", speaker: "user", deleted: false,
+        index: 0, sourcePath: path, sourceFile: file,
+      };
+      // Re-read after saving attachments so intervening activity entries survive.
+      await ctx.app.vault.process(file, current => appendPost(current, postBlock(post)));
+      setOpenThreads(prev => new Set(prev).add(post.rootId));
       setDraft("");
       closeComposer();
       await refresh();
+      if (hasAiMention(body)) await answerPost(post);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.timelinePostError"));
       new Notice(t("dashboard.timelinePostError"));
     } finally {
       setPosting(false);
+    }
+  };
+
+  const answerPost = async (post: TimelinePost) => {
+    if (!ctx || aiBusyRef.current) return;
+    aiBusyRef.current = true;
+    setAiBusy(post.id);
+    setError(null);
+    try {
+      const reply = await replyToTimelinePost(ctx.app.vault, ctx.plugin, name, baseDirectory, post);
+      setOpenThreads(prev => new Set(prev).add(reply.rootId));
+      await refresh();
+    } catch (err) {
+      setError(`${t("dashboard.timelineAiError")} ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      aiBusyRef.current = false;
+      setAiBusy(null);
     }
   };
 
@@ -834,10 +750,11 @@ export default function TimelineWidget({
       const created = new Date(post.createdAt);
       const imageLines = await Promise.all(editImages.map(async (img, index) => `![[${await savePostImage(created, post.id, img.file, index)}]]`));
       const nextBody = [body, ...imageLines].filter(Boolean).join("\n\n");
-      const current = await ctx.app.vault.read(post.sourceFile);
-      const next = replacePostContent(current, post.sourceFile, post.id, nextBody);
-      if (next == null) throw new Error(t("dashboard.fileNotFound"));
-      await ctx.app.vault.modify(post.sourceFile, next);
+      await ctx.app.vault.process(post.sourceFile, current => {
+        const next = replacePostContent(current, post.sourceFile, post.id, nextBody);
+        if (next == null) throw new Error(t("dashboard.fileNotFound"));
+        return next;
+      });
       cancelEditing();
       await refresh();
     } catch (err) {
@@ -849,19 +766,13 @@ export default function TimelineWidget({
 
   const togglePin = async (post: TimelinePost) => {
     if (!ctx) return;
-    const current = await ctx.app.vault.read(post.sourceFile);
-    const next = setPostPinnedContent(current, post.sourceFile, post.id, !post.pinned);
-    if (next == null) return;
-    await ctx.app.vault.modify(post.sourceFile, next);
+    await ctx.app.vault.process(post.sourceFile, current => setPostPinnedContent(current, post.sourceFile, post.id, !post.pinned) ?? current);
     await refresh();
   };
 
   const deletePost = async (post: TimelinePost) => {
     if (!ctx || !(await new ConfirmModal(ctx.app, t("dashboard.timelineDeleteConfirm")).openAndWait())) return;
-    const current = await ctx.app.vault.read(post.sourceFile);
-    const next = deletePostContent(current, post.sourceFile, post.id);
-    if (next == null) return;
-    await ctx.app.vault.modify(post.sourceFile, next);
+    await ctx.app.vault.process(post.sourceFile, current => deletePostContent(current, post.sourceFile, post.id) ?? current);
     await refresh();
   };
 
@@ -939,6 +850,11 @@ export default function TimelineWidget({
       : menu;
   };
 
+  const threads = timelineThreads(posts);
+  const repliesByRoot = new Map(threads.map(thread => [thread.root.id, thread.replies.length]));
+  const visiblePosts = threads.flatMap(thread => openThreads.has(thread.root.id) || filters.word || filters.tags || filters.from || filters.to || filters.pinnedOnly
+    ? [thread.root, ...thread.replies] : [thread.root]);
+
   const composer = composerOpen && (
     <div
       ref={composerRef}
@@ -946,6 +862,14 @@ export default function TimelineWidget({
       role={Platform.isMobile ? "dialog" : undefined}
       aria-modal={Platform.isMobile ? true : undefined}
     >
+      {replyTarget && <div className="dashboard-hub-db-timeline-reply-target">
+        <CornerDownRight size={14} />
+        <div className="dashboard-hub-db-timeline-reply-target-text">
+          <small>{t("dashboard.timelineReplyTo")}</small>
+          <span>{replyTarget.content.slice(0, 100) || t("dashboard.timelineDeleted")}</span>
+        </div>
+        <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => setReplyTarget(null)} aria-label={t("dashboard.cancel")}><X size={14} /></button>
+      </div>}
       <div className="dashboard-hub-db-timeline-textarea-wrap is-composer">
         <textarea
           ref={textareaRef}
@@ -958,7 +882,7 @@ export default function TimelineWidget({
           onKeyDown={(e) => {
             handleWikiKeyDown(e);
           }}
-          placeholder={t("dashboard.timelinePlaceholder")}
+          placeholder={t("dashboard.timelineThreadPlaceholder")}
         />
         {renderWikiSuggestions("draft")}
       </div>
@@ -975,7 +899,7 @@ export default function TimelineWidget({
           <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => inputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
             <Image size={14} />
           </button>
-          <button type="button" className="dashboard-hub-db-timeline-post" {...keepFocusProps} disabled={posting || (!draft.trim() && images.length === 0)} onClick={() => void submitPost()}>
+          <button type="button" className="dashboard-hub-db-timeline-post" {...keepFocusProps} disabled={posting || (hasAiMention(draft) && aiBusy !== null) || (!draft.trim() && images.length === 0)} onClick={() => void submitPost()}>
             {posting ? <Loader2 size={13} className="is-spinning" /> : <Send size={13} />}
             {t("dashboard.timelinePost")}
           </button>
@@ -1036,7 +960,7 @@ export default function TimelineWidget({
         ) : posts.length === 0 ? (
           <div className="dashboard-hub-db-widget-empty">{t("dashboard.timelineEmpty")}</div>
         ) : (
-          posts.map((post) => {
+          visiblePosts.map((post) => {
             const editing = editingPostId === post.id;
             const canCollapse = shouldCollapsePost(post.content, collapseLineLimit, collapseCharLimit);
             const collapsed = canCollapse && !expandedPosts.has(post.id);
@@ -1044,10 +968,12 @@ export default function TimelineWidget({
             const embedTargets = extractEmbedTargets(post.content);
             const body = stripPostTags(collapsed ? collapsedContent(post.content, collapseLineLimit, collapseCharLimit) : post.content);
             return (
-              <article key={`${post.sourcePath}:${post.id}`} className={`dashboard-hub-db-timeline-post-card${post.pinned ? " is-pinned" : ""}`}>
+              <article key={`${post.sourcePath}:${post.id}`} className={`dashboard-hub-db-timeline-post-card${post.pinned ? " is-pinned" : ""}${post.replyTo ? " is-reply" : ""}${post.speaker === "ai" ? " is-ai" : ""}${post.deleted ? " is-deleted" : ""}`}>
                 <div className="dashboard-hub-db-timeline-post-meta">
-                  <span>{new Date(post.createdAt).toLocaleString()}</span>
-                  {post.pinned && <Pin size={12} />}
+                  {post.speaker === "ai" && <span className="dashboard-hub-db-timeline-ai-author"><Sparkles size={12} /> AI</span>}
+                  <span className="dashboard-hub-db-timeline-post-time">{new Date(post.createdAt).toLocaleString()}</span>
+                  {post.pinned && <Pin size={12} className="dashboard-hub-db-timeline-pin-mark" />}
+                  {!post.deleted && <div className="dashboard-hub-db-timeline-post-tools">
                   <button type="button" className="dashboard-hub-db-timeline-iconbtn" onClick={() => void togglePin(post)} title={post.pinned ? t("dashboard.timelineUnpin") : t("dashboard.timelinePin")}>
                     <Pin size={13} />
                   </button>
@@ -1057,6 +983,7 @@ export default function TimelineWidget({
                   <button type="button" className="dashboard-hub-db-timeline-iconbtn is-danger" onClick={() => void deletePost(post)} title={t("dashboard.deleteWidget")}>
                     <Trash2 size={13} />
                   </button>
+                  </div>}
                 </div>
                 {editing ? (
                   <div
@@ -1113,7 +1040,7 @@ export default function TimelineWidget({
                   <>
                     <ObsidianMarkdown
                       app={ctx.app}
-                      markdown={body}
+                      markdown={post.deleted ? t("dashboard.timelineDeleted") : body}
                       sourcePath={post.sourcePath}
                       className={`dashboard-hub-db-timeline-body${collapsed ? " is-collapsed" : ""}`}
                       onInternalLinkClick={(target) => {
@@ -1163,6 +1090,24 @@ export default function TimelineWidget({
                       </div>
                     )}
                   </>
+                )}
+                {!editing && (
+                  <div className="dashboard-hub-db-timeline-thread-actions">
+                    {!post.replyTo && (repliesByRoot.get(post.id) ?? 0) > 0 && <button type="button" className={`dashboard-hub-db-timeline-thread-btn is-replies${openThreads.has(post.id) ? " is-open" : ""}`} onClick={() => setOpenThreads(prev => {
+                      const next = new Set(prev); if (next.has(post.id)) next.delete(post.id); else next.add(post.id); return next;
+                    })}>
+                      <MessageSquare size={13} />
+                      {t(openThreads.has(post.id) ? "dashboard.timelineHideReplies" : "dashboard.timelineShowReplies", { count: repliesByRoot.get(post.id) ?? 0 })}
+                    </button>}
+                    <button type="button" className="dashboard-hub-db-timeline-thread-btn" disabled={posting} onClick={() => { setReplyTarget(post); setComposerOpen(true); textareaRef.current?.focus(); }}>
+                      <Reply size={13} />
+                      {t("dashboard.timelineReply")}
+                    </button>
+                    {!post.deleted && post.speaker !== "ai" && hasAiMention(post.content) && <button type="button" className="dashboard-hub-db-timeline-thread-btn is-ai" disabled={aiBusy !== null} onClick={() => void answerPost(post)}>
+                      {aiBusy === post.id ? <Loader2 size={13} className="is-spinning" /> : <Sparkles size={13} />}
+                      {t("dashboard.timelineAskAi")}
+                    </button>}
+                  </div>
                 )}
               </article>
             );

@@ -2836,7 +2836,7 @@
 
 .dashboard-hub-db-timeline-title,
 .dashboard-hub-db-timeline-error,
-.dashboard-hub-db-timeline-post-meta span:first-child,
+.dashboard-hub-db-timeline-post-time,
 .dashboard-hub-db-timeline-embed-link span {
   min-width: 0;
   overflow: hidden;
@@ -3964,4 +3964,221 @@
 .dashboard-hub-db-base-create-row .dashboard-hub-db-picker {
   flex: 1;
   min-width: 0;
+}
+
+/* Timeline post cards: quiet chrome, content first. Obsidian's global
+   `button:not(.clickable-icon)` styling outranks a bare class selector, so the
+   timeline's ghost buttons are scoped under the widget root. */
+.dashboard-hub-db-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+.dashboard-hub-db-timeline-list > * {
+  flex: 0 0 auto;
+}
+.dashboard-hub-db-timeline-post-card {
+  margin: 0;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  --dashboard-hub-tl-card-bg: var(--background-primary);
+  background: var(--dashboard-hub-tl-card-bg);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.dashboard-hub-db-timeline-post-card:hover {
+  border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
+  --dashboard-hub-tl-card-bg: color-mix(in srgb, var(--background-primary) 94%, var(--text-normal));
+}
+.dashboard-hub-db-timeline-post-card.is-pinned {
+  border-color: color-mix(in srgb, var(--interactive-accent) 45%, var(--background-modifier-border));
+  --dashboard-hub-tl-card-bg: color-mix(in srgb, var(--interactive-accent) 6%, var(--background-primary));
+}
+.dashboard-hub-db-timeline-post-card.is-reply {
+  margin-left: 22px;
+  --dashboard-hub-tl-card-bg: var(--background-secondary);
+}
+.dashboard-hub-db-timeline-post-card.is-reply::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: color-mix(in srgb, var(--interactive-accent) 55%, transparent);
+}
+.dashboard-hub-db-timeline-post-card.is-ai {
+  --dashboard-hub-tl-card-bg: color-mix(in srgb, var(--color-purple, var(--interactive-accent)) 7%, var(--background-secondary));
+}
+.dashboard-hub-db-timeline-post-card.is-ai::before {
+  background: var(--color-purple, var(--interactive-accent));
+}
+.dashboard-hub-db-timeline-post-card.is-deleted .dashboard-hub-db-timeline-body {
+  color: var(--text-faint);
+  font-style: italic;
+}
+.dashboard-hub-db-timeline-post-card .dashboard-hub-db-timeline-body.is-collapsed::after {
+  background: linear-gradient(transparent, var(--dashboard-hub-tl-card-bg));
+}
+.dashboard-hub-db-timeline-post-meta {
+  min-height: 24px;
+  margin-bottom: 4px;
+  gap: 6px;
+}
+.dashboard-hub-db-timeline-post-time {
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-hub-db-timeline-pin-mark {
+  flex: 0 0 auto;
+  color: var(--interactive-accent);
+}
+.dashboard-hub-db-timeline-ai-author {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-purple, var(--interactive-accent)) 18%, transparent);
+  color: var(--color-purple, var(--interactive-accent));
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+.dashboard-hub-db-timeline-post-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.dashboard-hub-db-timeline-post-card:hover .dashboard-hub-db-timeline-post-tools,
+.dashboard-hub-db-timeline-post-card:focus-within .dashboard-hub-db-timeline-post-tools,
+.is-mobile .dashboard-hub-db-timeline-post-tools {
+  opacity: 1;
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-iconbtn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-iconbtn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-iconbtn.is-danger:hover {
+  background: color-mix(in srgb, var(--text-error) 14%, transparent);
+  color: var(--text-error);
+}
+.dashboard-hub-db-timeline-thread-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin: 6px -6px 0;
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-thread-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-thread-btn:hover:not(:disabled) {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-thread-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-thread-btn.is-replies {
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-thread-btn.is-ai {
+  color: var(--color-purple, var(--interactive-accent));
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-thread-btn.is-ai:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-purple, var(--interactive-accent)) 14%, transparent);
+  color: var(--color-purple, var(--interactive-accent));
+}
+
+/* Composer */
+.dashboard-hub-db-timeline > .dashboard-hub-db-timeline-composer {
+  gap: 8px;
+  padding: 10px;
+}
+.dashboard-hub-db-timeline-composer textarea,
+.dashboard-hub-db-timeline-edit textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: none;
+  line-height: 1.5;
+}
+.dashboard-hub-db-timeline-composer textarea:focus,
+.dashboard-hub-db-timeline-edit textarea:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 22%, transparent);
+}
+.dashboard-hub-db-timeline-reply-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--interactive-accent) 8%, var(--background-primary));
+  color: var(--text-muted);
+}
+.dashboard-hub-db-timeline-reply-target > svg {
+  flex: 0 0 auto;
+  color: var(--interactive-accent);
+}
+.dashboard-hub-db-timeline-reply-target-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dashboard-hub-db-timeline-reply-target-text small {
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: 600;
+}
+.dashboard-hub-db-timeline-reply-target-text span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-small);
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-post,
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-new {
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 7px;
+  background: var(--interactive-accent);
+  box-shadow: none;
+  color: var(--text-on-accent);
+  font-weight: 600;
+}
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-post:hover:not(:disabled),
+.dashboard-hub-db-timeline button.dashboard-hub-db-timeline-new:hover:not(:disabled) {
+  background: var(--interactive-accent-hover);
 }

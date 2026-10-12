@@ -3,6 +3,15 @@ export type TranslationKey = string;
 
 const translations: Record<string, Record<string, string>> = {
   "en": {
+    "dashboard.timelineThreadPlaceholder": "Write a post or reply. Ask AI with @ai…",
+    "dashboard.timelineReply": "Reply",
+    "dashboard.timelineReplyTo": "Replying to",
+    "dashboard.timelineDeleted": "Deleted post",
+    "dashboard.timelineShowReplies": "Show replies ({{count}})",
+    "dashboard.timelineHideReplies": "Hide replies ({{count}})",
+    "dashboard.timelineAskAi": "Ask AI / retry",
+    "dashboard.timelineAiError": "AI could not reply. Your post is saved; use Ask AI to retry.",
+
     "aiWorkflow.model": "Model:",
     "common.cancel": "Cancel",
     "common.close": "Close",
@@ -336,6 +345,15 @@ const translations: Record<string, Record<string, string>> = {
     "settings.vaultToolModeOptional": "Vault tools (optional)"
   },
   "ja": {
+    "dashboard.timelineThreadPlaceholder": "投稿・返信を書く。@ai でAIに質問…",
+    "dashboard.timelineReply": "返信",
+    "dashboard.timelineReplyTo": "返信先",
+    "dashboard.timelineDeleted": "削除された投稿",
+    "dashboard.timelineShowReplies": "返信を表示 ({{count}})",
+    "dashboard.timelineHideReplies": "返信を閉じる ({{count}})",
+    "dashboard.timelineAskAi": "AIに質問 / 再試行",
+    "dashboard.timelineAiError": "AIの返信に失敗しました。投稿は保存済みです。「AIに質問」で再試行できます。",
+
     "aiWorkflow.model": "モデル:",
     "common.cancel": "キャンセル",
     "common.close": "閉じる",

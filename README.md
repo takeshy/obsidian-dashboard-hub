@@ -13,6 +13,12 @@ It works without an AI account, API key, or external database.
 
 ## Activity Timeline
 
+Use **Reply** on a post to start a thread. Replies stay together across days and can be collapsed.
+With a compatible AI Hub connected, post or reply with `@ai your question` to receive an AI answer in the thread.
+Answers are saved as Markdown. Failed requests keep your question; use **Ask AI / retry** to try again.
+The connected Hub's default text model receives the thread's text, without reading the rest of your Vault.
+
+
 You can post directly to a Timeline with tags, wikilinks, pinned posts, filters,
 and image attachments. Dashboard Hub can also add entries for these actions:
 
