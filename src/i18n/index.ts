@@ -25,7 +25,7 @@ const translations: Record<string, Record<string, string>> = {
     "dashboard.timelineDeleted": "Deleted post",
     "dashboard.timelineShowReplies": "Show replies ({{count}})",
     "dashboard.timelineHideReplies": "Hide replies ({{count}})",
-    "dashboard.timelineAskAi": "Ask AI / retry",
+    "dashboard.timelineAiAnswering": "AI is answering…",
     "dashboard.timelineAiError": "AI could not reply. Your post is saved; use Ask AI to retry.",
 
     "aiWorkflow.model": "Model:",
@@ -383,7 +383,7 @@ const translations: Record<string, Record<string, string>> = {
     "dashboard.timelineDeleted": "削除された投稿",
     "dashboard.timelineShowReplies": "返信を表示 ({{count}})",
     "dashboard.timelineHideReplies": "返信を閉じる ({{count}})",
-    "dashboard.timelineAskAi": "AIに質問 / 再試行",
+    "dashboard.timelineAiAnswering": "AIが回答中…",
     "dashboard.timelineAiError": "AIの返信に失敗しました。投稿は保存済みです。「AIに質問」で再試行できます。",
 
     "aiWorkflow.model": "モデル:",

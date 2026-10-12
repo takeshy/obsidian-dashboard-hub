@@ -751,6 +751,9 @@ export default function TimelineWidget({
     if (!ctx || savingPostId) return;
     const body = editDraft.trim();
     if (!body && editImages.length === 0) return;
+    // Saving an @ai post asks the AI again, so wait for any running answer first.
+    const askAi = post.speaker !== "ai" && hasAiMention(body);
+    if (askAi && aiBusyRef.current) return;
     setSavingPostId(post.id);
     setError(null);
     try {
@@ -764,6 +767,7 @@ export default function TimelineWidget({
       });
       cancelEditing();
       await refresh();
+      if (askAi) await answerPost({ ...post, content: nextBody });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("dashboard.timelinePostError"));
     } finally {
@@ -1008,7 +1012,7 @@ export default function TimelineWidget({
                         <button type="button" className="dashboard-hub-db-timeline-iconbtn" {...keepFocusProps} onClick={() => editInputRef.current?.click()} title={t("dashboard.timelineAttachImage")}>
                           <Image size={14} />
                         </button>
-                        <button type="button" className="dashboard-hub-db-timeline-post" {...keepFocusProps} disabled={savingPostId === post.id || (!editDraft.trim() && editImages.length === 0)} onClick={() => void saveEdit(post)}>
+                        <button type="button" className="dashboard-hub-db-timeline-post" {...keepFocusProps} disabled={savingPostId === post.id || (post.speaker !== "ai" && hasAiMention(editDraft) && aiBusy !== null) || (!editDraft.trim() && editImages.length === 0)} onClick={() => void saveEdit(post)}>
                           {savingPostId === post.id ? <Loader2 size={13} className="is-spinning" /> : <Send size={13} />}
                           {t("dashboard.save")}
                         </button>
@@ -1082,10 +1086,10 @@ export default function TimelineWidget({
                       <Reply size={13} />
                       {t("dashboard.timelineReply")}
                     </button>
-                    {!post.deleted && post.speaker !== "ai" && hasAiMention(post.content) && <button type="button" className="dashboard-hub-db-timeline-thread-btn is-ai" disabled={aiBusy !== null} onClick={() => void answerPost(post)}>
-                      {aiBusy === post.id ? <Loader2 size={13} className="is-spinning" /> : <Sparkles size={13} />}
-                      {t("dashboard.timelineAskAi")}
-                    </button>}
+                    {aiBusy === post.id && <span className="dashboard-hub-db-timeline-ai-busy">
+                      <Loader2 size={13} className="is-spinning" />
+                      {t("dashboard.timelineAiAnswering")}
+                    </span>}
                   </div>
                 )}
               </article>

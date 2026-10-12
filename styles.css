@@ -4283,3 +4283,12 @@
 .is-mobile .dashboard-hub-db-timeline-ai-panel {
   max-height: 30dvh;
 }
+.dashboard-hub-db-timeline-ai-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--color-purple, var(--interactive-accent));
+  font-size: var(--font-ui-smaller);
+}
