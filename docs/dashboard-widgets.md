@@ -109,6 +109,8 @@ Settings:
 
 Posts can contain tags, images, and wikilinks. Typing `[[` in the composer or inline editor opens a file suggestion popup; arrow keys or Tab navigate and Enter inserts the link. Long posts and embedded notes collapse with Show more / Show less. Timeline image attachments are saved under `<Base directory>/Timeline/<name>/attachments/<date>/`.
 
+The Bluesky button on a post opens a publish dialog for that thread. Each post is shown as it will be published: Timeline-only markup is removed, long text is split into Bluesky-sized chunks, replies keep their order as a thread, and attached Vault images (PNG, JPEG, WebP, GIF) are resized and uploaded as attachments. A post can instead be published as pictures of its rendered Markdown (light theme, 720px wide, cut into pages of 1440px, four per Bluesky post); this is preselected for posts with code, tables, callouts or math, and the pictures are drawn as soon as **Image** is chosen. The text then carries only the links, and a post that cannot be drawn falls back to text. The button appears only when Bluesky is turned on in the plugin settings and **Check connection** has succeeded there. The settings also hold the handle and the app password (kept in Obsidian's secret storage, not in the plugin settings file). The deterministic record keys make a retry after a lost response skip already-published posts instead of duplicating them.
+
 # Calendar Widget
 
 The Calendar widget connects to one named Timeline and shows a fixed-size monthly calendar. Day markers distinguish scheduled events and Timeline activity.

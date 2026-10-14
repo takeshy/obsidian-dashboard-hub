@@ -32,6 +32,16 @@ AI Hubの標準テキストモデルを使い、Vault全体ではなくスレッ
 Calendarは指定したTimelineの予定と投稿を月表示します。メモ、Kanban、Calendarの
 自動記録先は、設定の **Activity Timeline name** で変更できます。初期値は `Timeline` です。
 
+### Blueskyへ投稿
+
+Timelineの投稿にある **Bluesky** ボタンから、そのスレッドを
+[Bluesky](https://bsky.app) に公開できます。公開する投稿を選ぶと、投稿される形がその場で表示されます。
+返信の順序、長文の分割、画像添付は自動で処理されます。コード・表・コールアウト・数式を含む投稿は、
+投稿ごとに **画像** を選ぶと表示どおりの画像として公開できます（本文にはリンクだけが残ります）。設定の **Bluesky** をONにして、ハンドルと、
+[Blueskyのアプリパスワードページ](https://bsky.app/settings/app-passwords) で作成した
+アプリパスワードを設定画面で指定し、**接続確認** を押してください。確認に成功するとボタンが表示されます。パスワードはObsidianのシークレット
+ストレージに保存され（Obsidian 1.11.4以降）、Blueskyでいつでも失効できます。
+
 ## Secret Manager
 
 APIキーやトークンなどを `.encrypted` ファイルとして保存します。標準の保存先は

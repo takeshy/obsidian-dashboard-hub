@@ -37,6 +37,20 @@ shows events and posts from a selected Timeline in a monthly view. Automatic
 memo, Kanban, and Calendar activity uses the global **Activity Timeline name**,
 which defaults to `Timeline`.
 
+### Post to Bluesky
+
+Use **Bluesky** on a Timeline post to publish that thread to
+[Bluesky](https://bsky.app). Select the posts to publish; each one is shown as it will be posted, and
+reply order, text splitting, and image attachments are handled automatically.
+Posts with code, tables, callouts or math can be published as images of the
+rendered Markdown instead (choose **Image** for the post); only its links stay in the text.
+Turn on **Bluesky** in the plugin settings
+and enter your handle and an app password created on the
+[Bluesky app password page](https://bsky.app/settings/app-passwords), then
+press **Check connection**; the button appears once the check succeeds. The
+password is kept in Obsidian's secret storage (Obsidian 1.11.4 or later) and
+can be revoked in Bluesky anytime.
+
 ## Secret Manager
 
 Secret Manager stores API keys, tokens, and other values as `.encrypted` files

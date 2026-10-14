@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, CornerDownRight, ExternalLink, Image, Loader2, MessageSquare, PenLine, Pin, Plus, Reply, Search, Send, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CornerDownRight, ExternalLink, Image, Loader2, MessageSquare, PenLine, Pin, Plus, Reply, Search, Send, Share2, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import { Notice, Platform, TFile } from "obsidian";
 import { t } from "src/i18n";
 import { DASHBOARD_FOLDER, type WidgetContext } from "../types";
 import type { TimelineAiSettings } from "src/plugin";
 import { ensureVaultFolder } from "../dashboardFile";
+import { blueskyEntryFromPost } from "../bluesky";
 import ObsidianMarkdown from "./ObsidianMarkdown";
 import { TimelineLinkPreviewModal } from "./TimelineLinkPreviewModal";
 import { TimelineAiPanel } from "./TimelineAiPanel";
+import { BlueskyModal } from "./BlueskyModal";
 import { hasAiMention, replyToTimelinePost } from "../timelineAi";
 import { splitPosts, appendPost, replacePostContent, setPostPinnedContent, deletePostContent, timelineThreads, selectTimelineThreads, postBlock, type TimelinePost } from "../timelineThreads";
 import { ConfirmModal } from "src/ui/components/ConfirmModal";
@@ -789,6 +791,17 @@ export default function TimelineWidget({
 
   const [aiLookupActive, setAiLookupActive] = useState(() => isAiLookupActive(ctx?.plugin.settings.timelineAi));
 
+  const [blueskyReady, setBlueskyReady] = useState(() => Boolean(ctx?.plugin.isBlueskyReady()));
+  useEffect(() => {
+    if (!ctx) return;
+    const workspace = ctx.app.workspace as unknown as {
+      on: (name: string, callback: () => void) => { id: string };
+      offref: (ref: { id: string }) => void;
+    };
+    const ref = workspace.on("dashboard-hub:bluesky-changed", () => setBlueskyReady(ctx.plugin.isBlueskyReady()));
+    return () => workspace.offref(ref);
+  }, [ctx]);
+
 
   if (!ctx) return null;
 
@@ -837,6 +850,14 @@ export default function TimelineWidget({
 
   const threads = timelineThreads(posts);
   const repliesByRoot = new Map(threads.map(thread => [thread.root.id, thread.replies.length]));
+
+  const openBlueskyModal = (post: TimelinePost) => {
+    if (!ctx) return;
+    const thread = threads.find(item => [item.root, ...item.replies].some(entry => entry.id === post.id));
+    const entries = (thread ? [thread.root, ...thread.replies] : []).filter(entry => !entry.deleted).map(blueskyEntryFromPost);
+    if (!entries.length) return;
+    new BlueskyModal(ctx.app, ctx.plugin, entries, post.id).open();
+  };
   const visiblePosts = threads.flatMap(thread => openThreads.has(thread.root.id) || filters.word || filters.tags || filters.from || filters.to || filters.pinnedOnly
     ? [thread.root, ...thread.replies] : [thread.root]);
 
@@ -1086,6 +1107,10 @@ export default function TimelineWidget({
                       <Reply size={13} />
                       {t("dashboard.timelineReply")}
                     </button>
+                    {blueskyReady && !post.deleted && <button type="button" className="dashboard-hub-db-timeline-thread-btn" disabled={posting} title={t("bluesky.title")} onClick={() => openBlueskyModal(post)}>
+                      <Share2 size={13} />
+                      {t("dashboard.timelineBluesky")}
+                    </button>}
                     {aiBusy === post.id && <span className="dashboard-hub-db-timeline-ai-busy">
                       <Loader2 size={13} className="is-spinning" />
                       {t("dashboard.timelineAiAnswering")}

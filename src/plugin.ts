@@ -1,7 +1,9 @@
 import {
+  debounce,
   Notice,
   Plugin,
   PluginSettingTab,
+  SecretComponent,
   Setting,
   TFile,
   type App,
@@ -36,6 +38,7 @@ import {
   UNREGISTER_RUNTIME_SKILL_EVENT,
 } from "src/integrations/dashboardSkill";
 import { appendInstructionHistory } from "src/ui/instructionHistory";
+import { blueskyCredentials, clearBlueskySession, DEFAULT_BLUESKY_SERVICE, verifyBluesky, type BlueskyCredentials } from "src/dashboard/blueskyClient";
 
 export interface DashboardHubSettings {
   baseDirectory: string;
@@ -44,7 +47,21 @@ export interface DashboardHubSettings {
   preferredModels: Record<string, string>;
   aiInstructionHistory: Partial<Record<DashboardCapability, string[]>>;
   timelineAi: TimelineAiSettings;
+  bluesky: BlueskySettings;
 }
+
+/** Posting Timeline threads to Bluesky. The app password itself lives in Obsidian's secret storage. */
+export interface BlueskySettings {
+  enabled: boolean;
+  handle: string;
+  /** Name of the Obsidian secret that holds the app password. */
+  appPasswordSecret: string;
+  service: string;
+  /** True once a connection check succeeded with the current handle, secret and server. */
+  verified: boolean;
+}
+
+const LEGACY_BLUESKY_SECRET = "dashboard-hub-bluesky-app-password";
 
 /** How @ai answers may look things up. `search` is "", "web" or "rag:<setting name>". */
 export interface TimelineAiSettings {
@@ -150,6 +167,7 @@ const DEFAULT_SETTINGS: DashboardHubSettings = {
   preferredModels: {},
   aiInstructionHistory: {},
   timelineAi: { allowVaultRead: false, search: "", mcpServers: [], skills: [] },
+  bluesky: { enabled: false, handle: "", appPasswordSecret: "", service: "", verified: false },
 };
 
 export class DashboardHubPlugin extends Plugin {
@@ -211,6 +229,7 @@ export class DashboardHubPlugin extends Plugin {
 
   onunload(): void {
     cryptoCache.clear();
+    clearBlueskySession();
     const workspace = this.app.workspace as unknown as { trigger: (name: string, value: unknown) => void };
     workspace.trigger(UNREGISTER_RUNTIME_SKILL_EVENT, { ownerId: DASHBOARD_SKILL.ownerId, id: DASHBOARD_SKILL.id });
     this.integrations.clear();
@@ -219,6 +238,12 @@ export class DashboardHubPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const loaded = await this.loadData() as (Partial<DashboardHubSettings> & { encryption?: unknown }) | null;
     const { encryption: legacyEncryption, ...current } = loaded ?? {};
+    const storedBluesky = (current.bluesky ?? {}) as Partial<BlueskySettings> & { appPassword?: unknown };
+    // Early builds kept the app password in data.json; move it into Obsidian's secret storage.
+    const legacyPassword = typeof storedBluesky.appPassword === "string" ? storedBluesky.appPassword.trim() : "";
+    if (legacyPassword && !storedBluesky.appPasswordSecret) {
+      this.app.secretStorage.setSecret(LEGACY_BLUESKY_SECRET, legacyPassword);
+    }
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...current,
@@ -227,10 +252,21 @@ export class DashboardHubPlugin extends Plugin {
       preferredModels: { ...DEFAULT_SETTINGS.preferredModels, ...(current.preferredModels ?? {}) },
       aiInstructionHistory: { ...DEFAULT_SETTINGS.aiInstructionHistory, ...(current.aiInstructionHistory ?? {}) },
       timelineAi: { ...DEFAULT_SETTINGS.timelineAi, ...(current.timelineAi ?? {}) },
+      bluesky: {
+        enabled: typeof storedBluesky.enabled === "boolean" ? storedBluesky.enabled : Boolean(legacyPassword),
+        handle: typeof storedBluesky.handle === "string" ? storedBluesky.handle.trim() : "",
+        appPasswordSecret: typeof storedBluesky.appPasswordSecret === "string" && storedBluesky.appPasswordSecret
+          ? storedBluesky.appPasswordSecret
+          : legacyPassword ? LEGACY_BLUESKY_SECRET : "",
+        service: typeof storedBluesky.service === "string" ? storedBluesky.service.trim() : "",
+        // Legacy passwords were only saved after the dialog had signed in with them.
+        verified: typeof storedBluesky.verified === "boolean" ? storedBluesky.verified : Boolean(legacyPassword),
+      },
     };
     // Secret files carry their own encrypted private key and salt. Remove the
-    // obsolete plugin-level key copy left by early Dashboard Hub builds.
-    if (legacyEncryption !== undefined) await this.saveSettings();
+    // obsolete plugin-level key copy left by early Dashboard Hub builds, and the
+    // plaintext Bluesky app password now held in secret storage.
+    if (legacyEncryption !== undefined || storedBluesky.appPassword !== undefined) await this.saveSettings();
   }
 
   async saveSettings(): Promise<void> {
@@ -335,6 +371,59 @@ export class DashboardHubPlugin extends Plugin {
   async setTimelineAi(patch: Partial<TimelineAiSettings>): Promise<void> {
     this.settings.timelineAi = { ...this.settings.timelineAi, ...patch };
     await this.saveSettings();
+  }
+
+  async setBluesky(patch: Partial<BlueskySettings>): Promise<void> {
+    const previous = this.settings.bluesky;
+    const next = {
+      ...previous,
+      ...patch,
+      handle: (patch.handle ?? previous.handle).trim(),
+      service: (patch.service ?? previous.service).trim(),
+    };
+    // A different account or server needs a new connection check.
+    if (next.handle !== previous.handle || next.appPasswordSecret !== previous.appPasswordSecret || next.service !== previous.service) {
+      next.verified = patch.verified ?? false;
+      clearBlueskySession();
+    }
+    this.settings.bluesky = next;
+    await this.saveSettings();
+    if (next.enabled !== previous.enabled || next.verified !== previous.verified) {
+      const workspace = this.app.workspace as unknown as { trigger: (name: string) => void };
+      workspace.trigger("dashboard-hub:bluesky-changed");
+    }
+  }
+
+  /** Bluesky posting is offered only when it is on and the connection check succeeded. */
+  isBlueskyReady(): boolean {
+    return this.settings.bluesky.enabled && this.settings.bluesky.verified;
+  }
+
+  private storedBlueskyCredentials(): BlueskyCredentials | null {
+    const { handle, appPasswordSecret, service } = this.settings.bluesky;
+    if (!appPasswordSecret) return null;
+    return blueskyCredentials({ handle, appPassword: this.app.secretStorage.getSecret(appPasswordSecret) ?? "", service });
+  }
+
+  /** Credentials for posting, or null when Bluesky is not ready. */
+  getBlueskyCredentials(): BlueskyCredentials | null {
+    return this.isBlueskyReady() ? this.storedBlueskyCredentials() : null;
+  }
+
+  /** Sign in with the stored settings and mark them verified on success. */
+  async checkBlueskyConnection(): Promise<void> {
+    const credentials = this.storedBlueskyCredentials();
+    if (!credentials) {
+      await this.setBluesky({ verified: false });
+      throw new Error(t("bluesky.connectError"));
+    }
+    try {
+      await verifyBluesky(credentials);
+    } catch (error) {
+      await this.setBluesky({ verified: false });
+      throw error;
+    }
+    await this.setBluesky({ verified: true });
   }
 
   /** Model and lookup options for @ai answers, or null when no Hub can answer. */
@@ -470,12 +559,59 @@ export class DashboardHubPlugin extends Plugin {
 /** @deprecated Use DashboardHubPlugin. Kept for source compatibility. */
 export type LlmHubPlugin = DashboardHubPlugin;
 
+function blueskyAppPasswordDesc(): DocumentFragment {
+  return createFragment((fragment) => {
+    fragment.appendText(`${t("settings.blueskyAppPasswordDesc")} `);
+    fragment.createEl("a", { text: t("settings.blueskyOpenAppPasswords"), href: "https://bsky.app/settings/app-passwords" });
+  });
+}
+
+/** The connection status row: a check button and the current state. Returns a cleanup. */
+function renderBlueskyCheck(app: App, plugin: DashboardHubPlugin, setting: Setting, flush: () => void): () => void {
+  const showStatus = () => {
+    const { verified, handle } = plugin.settings.bluesky;
+    setting.setDesc(verified ? t("settings.blueskyVerified", { handle }) : t("settings.blueskyNotVerified"));
+    setting.descEl.toggleClass("mod-warning", !verified);
+  };
+  showStatus();
+  setting.addButton((button) => {
+    button.setButtonText(t("settings.blueskyVerifyButton")).setCta().onClick(async () => {
+      flush();
+      button.setDisabled(true).setButtonText(t("settings.blueskyVerifying"));
+      try {
+        await plugin.checkBlueskyConnection();
+        new Notice(t("settings.blueskyVerified", { handle: plugin.settings.bluesky.handle }));
+      } catch (error) {
+        new Notice(error instanceof Error ? error.message : String(error));
+      } finally {
+        button.setDisabled(false).setButtonText(t("settings.blueskyVerifyButton"));
+        showStatus();
+      }
+    });
+  });
+  const workspace = app.workspace as unknown as { on: (name: string, callback: () => void) => EventRef };
+  const ref = workspace.on("dashboard-hub:bluesky-changed", showStatus);
+  return () => app.workspace.offref(ref);
+}
+
+type SettingKey = "baseDirectory" | "activityTimelineName" | "blueskyEnabled" | "blueskyHandle" | "blueskyService";
+
 class DashboardHubSettingTab extends PluginSettingTab {
   constructor(app: App, private dashboardPlugin: DashboardHubPlugin) {
     super(app, dashboardPlugin);
   }
 
-  getSettingDefinitions(): SettingDefinitionItem<"baseDirectory" | "activityTimelineName">[] {
+  // Bluesky text fields save once typing pauses instead of on every keystroke.
+  private saveBlueskyHandle = debounce((value: string) => void this.dashboardPlugin.setBluesky({ handle: value }), 600, true);
+  private saveBlueskyService = debounce((value: string) => void this.dashboardPlugin.setBluesky({ service: value }), 600, true);
+
+  private flushBlueskyFields(): void {
+    this.saveBlueskyHandle.run();
+    this.saveBlueskyService.run();
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem<SettingKey>[] {
+    const blueskyOn = () => this.dashboardPlugin.settings.bluesky.enabled;
     return [{
       name: "Base directory",
       desc: "Root folder for dashboards and their bases, kanbans, memos, timelines, and cached data. Changing it does not move existing files.",
@@ -494,12 +630,62 @@ class DashboardHubSettingTab extends PluginSettingTab {
         defaultValue: "Timeline",
         placeholder: "Timeline",
       },
+    }, {
+      name: t("settings.timelineAiHeading"),
+      desc: t("settings.timelineAiDesc"),
+      render: (setting) => {
+        setting.setHeading();
+        // The rows depend on the connected AI Hub, so they render imperatively after the heading.
+        const container = createDiv({ cls: "dashboard-hub-setting-rows" });
+        setting.settingEl.after(container);
+        this.renderTimelineAi(container);
+        return () => {
+          this.hide();
+          container.remove();
+        };
+      },
+    }, {
+      type: "group",
+      heading: t("settings.blueskyHeading"),
+      items: [{
+        name: t("settings.blueskyEnabled"),
+        desc: t("settings.blueskyDesc"),
+        control: { type: "toggle", key: "blueskyEnabled" },
+      }, {
+        name: t("settings.blueskyHandle"),
+        desc: t("settings.blueskyHandleDesc"),
+        visible: blueskyOn,
+        control: { type: "text", key: "blueskyHandle", placeholder: "alice.bsky.social" },
+      }, {
+        name: t("settings.blueskyAppPassword"),
+        desc: blueskyAppPasswordDesc(),
+        visible: blueskyOn,
+        render: (setting) => {
+          setting.addComponent((el) => new SecretComponent(this.app, el)
+            .setValue(this.dashboardPlugin.settings.bluesky.appPasswordSecret)
+            .onChange(async (value) => {
+              await this.dashboardPlugin.setBluesky({ appPasswordSecret: value });
+            }));
+        },
+      }, {
+        name: t("settings.blueskyService"),
+        desc: t("settings.blueskyServiceDesc"),
+        visible: blueskyOn,
+        control: { type: "text", key: "blueskyService", placeholder: DEFAULT_BLUESKY_SERVICE },
+      }, {
+        name: t("settings.blueskyVerify"),
+        visible: blueskyOn,
+        render: (setting) => renderBlueskyCheck(this.app, this.dashboardPlugin, setting, () => this.flushBlueskyFields()),
+      }],
     }];
   }
 
   getControlValue(key: string): unknown {
     if (key === "baseDirectory") return this.dashboardPlugin.settings.baseDirectory;
     if (key === "activityTimelineName") return this.dashboardPlugin.settings.activityTimelineName;
+    if (key === "blueskyEnabled") return this.dashboardPlugin.settings.bluesky.enabled;
+    if (key === "blueskyHandle") return this.dashboardPlugin.settings.bluesky.handle;
+    if (key === "blueskyService") return this.dashboardPlugin.settings.bluesky.service;
     return undefined;
   }
 
@@ -508,6 +694,13 @@ class DashboardHubSettingTab extends PluginSettingTab {
       await this.dashboardPlugin.setBaseDirectory(value);
     } else if (key === "activityTimelineName" && typeof value === "string") {
       await this.dashboardPlugin.setActivityTimelineName(value);
+    } else if (key === "blueskyEnabled" && typeof value === "boolean") {
+      await this.dashboardPlugin.setBluesky({ enabled: value });
+      this.refreshDomState();
+    } else if (key === "blueskyHandle" && typeof value === "string") {
+      this.saveBlueskyHandle(value);
+    } else if (key === "blueskyService" && typeof value === "string") {
+      this.saveBlueskyService(value);
     }
   }
 
@@ -541,14 +734,66 @@ class DashboardHubSettingTab extends PluginSettingTab {
     new Setting(this.containerEl).setName(t("settings.timelineAiHeading")).setHeading();
     this.containerEl.createEl("p", { cls: "setting-item-description", text: t("settings.timelineAiDesc") });
     this.renderTimelineAi(this.containerEl.createDiv());
+
+    new Setting(this.containerEl).setName(t("settings.blueskyHeading")).setHeading();
+    this.renderBluesky(this.containerEl.createDiv());
   }
 
   hide(): void {
+    this.blueskyCheckCleanup?.();
+    this.blueskyCheckCleanup = null;
     if (this.integrationsRef) this.app.workspace.offref(this.integrationsRef);
     this.integrationsRef = null;
   }
 
   private integrationsRef: EventRef | null = null;
+
+  private blueskyCheckCleanup: (() => void) | null = null;
+
+  private renderBluesky(container: HTMLElement): void {
+    this.blueskyCheckCleanup?.();
+    this.blueskyCheckCleanup = null;
+    container.empty();
+    const plugin = this.dashboardPlugin;
+    const bluesky = plugin.settings.bluesky;
+    new Setting(container)
+      .setName(t("settings.blueskyEnabled"))
+      .setDesc(t("settings.blueskyDesc"))
+      .addToggle((toggle) => {
+        toggle.setValue(bluesky.enabled).onChange(async (value) => {
+          await plugin.setBluesky({ enabled: value });
+          this.renderBluesky(container);
+        });
+      });
+    if (!bluesky.enabled) return;
+    new Setting(container)
+      .setName(t("settings.blueskyHandle"))
+      .setDesc(t("settings.blueskyHandleDesc"))
+      .addText((textInput) => {
+        textInput
+          .setPlaceholder("alice.bsky.social")
+          .setValue(bluesky.handle)
+          .onChange(this.saveBlueskyHandle);
+      });
+    new Setting(container)
+      .setName(t("settings.blueskyAppPassword"))
+      .setDesc(blueskyAppPasswordDesc())
+      .addComponent((el) => new SecretComponent(this.app, el)
+        .setValue(bluesky.appPasswordSecret)
+        .onChange(async (value) => {
+          await plugin.setBluesky({ appPasswordSecret: value });
+        }));
+    new Setting(container)
+      .setName(t("settings.blueskyService"))
+      .setDesc(t("settings.blueskyServiceDesc"))
+      .addText((textInput) => {
+        textInput
+          .setPlaceholder(DEFAULT_BLUESKY_SERVICE)
+          .setValue(bluesky.service)
+          .onChange(this.saveBlueskyService);
+      });
+    this.blueskyCheckCleanup = renderBlueskyCheck(this.app, plugin, new Setting(container).setName(t("settings.blueskyVerify")), () => this.flushBlueskyFields());
+  }
 
   private renderTimelineAi(container: HTMLElement): void {
     const plugin = this.dashboardPlugin;
