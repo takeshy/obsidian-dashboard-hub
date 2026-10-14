@@ -232,6 +232,23 @@ describe("publishBlueskyPosts", () => {
     expect(posts503).toBe(0);
   });
 
+  it.each([null, [], "invalid", { uri: 42, cid: "cid" }, { uri: "at://record", cid: true }])("rejects malformed verification responses without publishing: %j", async json => {
+    let writes = 0;
+    const api = fakeApi(method => {
+      if (method === "post") writes++;
+      return { status: 200, json };
+    });
+    await expect(publishBlueskyPosts(api, "did:plc:test", [posts[0]])).rejects.toThrow("Could not verify");
+    expect(writes).toBe(0);
+  });
+
+  it("rejects malformed publication confirmations", async () => {
+    const api = fakeApi(method => method === "get"
+      ? { status: 400, json: { error: "RecordNotFound" } }
+      : { status: 200, json: { uri: "at://record", cid: 42 } });
+    await expect(publishBlueskyPosts(api, "did:plc:test", [posts[0]])).rejects.toThrow("could not be confirmed");
+  });
+
   it("rejects an existing record that differs from the preview", async () => {
     const key = await blueskyRecordKey("did:plc:test", posts[0]);
     const api = fakeApi((_method, path) => {

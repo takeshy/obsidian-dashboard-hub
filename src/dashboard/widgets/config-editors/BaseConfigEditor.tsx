@@ -412,7 +412,7 @@ export function BaseConfigEditor({ config, onChange, app, plugin }: ConfigEditor
         if (folder && !file.path.toLowerCase().startsWith(`${folder}/`)) continue;
         const cache = app.metadataCache.getFileCache(file);
         if (tag && !(cache && getAllTags(cache)?.some((value) => value.replace(/^#/, "").toLowerCase() === tag))) continue;
-        const value = cache?.frontmatter?.[status];
+        const value: unknown = cache?.frontmatter?.[status];
         if (value != null && String(value)) otherStatuses.push(String(value));
       }
       await ensureVaultFolder(app.vault, basesFolder);

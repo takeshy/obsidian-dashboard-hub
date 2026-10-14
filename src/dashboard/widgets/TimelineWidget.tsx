@@ -688,7 +688,8 @@ export default function TimelineWidget({
         try { existing = await ctx.app.vault.create(path, ""); }
         catch (err) { existing = ctx.app.vault.getAbstractFileByPath(path); if (!(existing instanceof TFile)) throw err; }
       }
-      const file = existing as TFile;
+      if (!(existing instanceof TFile)) throw new Error("Could not create the Timeline file.");
+      const file = existing;
       const current = await ctx.app.vault.read(file);
       const id = uniquePostId(now, current, file);
       const imageLines = await Promise.all(images.map(async (img, index) => `![[${await savePostImage(now, id, img.file, index)}]]`));

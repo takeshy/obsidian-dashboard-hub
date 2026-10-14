@@ -36,13 +36,13 @@ function settle(el: HTMLElement): Promise<void> {
 async function imageDataUrl(src: string): Promise<string | null> {
   if (src.startsWith("data:")) return src;
   try {
-    const blob = /^https?:/i.test(src)
+    const source = /^https?:/i.test(src)
       ? new Blob([(await requestUrl({ url: src })).arrayBuffer])
-      : await (await fetch(src)).blob();
-    const bitmap = await createImageBitmap(blob);
+      : await loadImage(src);
+    const bitmap = await createImageBitmap(source);
     try {
       const scale = Math.min(1, MAX_INLINE_IMAGE / bitmap.width);
-      const canvas = document.createElement("canvas");
+      const canvas = createEl("canvas");
       canvas.width = Math.max(1, Math.round(bitmap.width * scale));
       canvas.height = Math.max(1, Math.round(bitmap.height * scale));
       const context = canvas.getContext("2d");
@@ -59,7 +59,7 @@ async function imageDataUrl(src: string): Promise<string | null> {
 async function inlineResources(live: HTMLElement, clone: HTMLElement): Promise<void> {
   const liveCanvases = Array.from(live.querySelectorAll("canvas"));
   Array.from(clone.querySelectorAll("canvas")).forEach((canvas, index) => {
-    const img = document.createElement("img");
+    const img = createEl("img");
     try { img.src = liveCanvases[index].toDataURL("image/png"); } catch { canvas.remove(); return; }
     img.width = liveCanvases[index].clientWidth;
     canvas.replaceWith(img);
@@ -131,7 +131,7 @@ export async function renderBlueskySnapshot(app: App, markdown: string, sourcePa
     for (let index = 0; index < pages; index++) {
       const top = index * PAGE_HEIGHT;
       const pageHeight = Math.max(1, Math.min(PAGE_HEIGHT, height - top));
-      const canvas = document.createElement("canvas");
+      const canvas = createEl("canvas");
       canvas.width = WIDTH * SCALE;
       canvas.height = pageHeight * SCALE;
       const context = canvas.getContext("2d");

@@ -71,7 +71,8 @@ export async function replyToTimelinePost(
     try { existing = await vault.create(path, ""); }
     catch (err) { existing = vault.getAbstractFileByPath(path); if (!(existing instanceof TFile)) throw err; }
   }
-  const file = existing as TFile;
+  if (!(existing instanceof TFile)) throw new Error("Could not create the Timeline file.");
+  const file = existing;
   const reply: TimelinePost = {
     ...question, metadata: {}, id: `ai-${crypto.randomUUID()}`, createdAt: now.toISOString(),
     sourcePath: path, sourceFile: file, content: answer, pinned: false, deleted: false,

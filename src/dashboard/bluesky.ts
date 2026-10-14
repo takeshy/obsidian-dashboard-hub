@@ -42,8 +42,8 @@ export function blueskyEntryFromPost(post: TimelinePost): BlueskyEntry {
 function outsideUrls(text: string, transform: (part: string) => string): string {
   let result = "", last = 0;
   for (const match of text.matchAll(URL_RE)) {
-    result += transform(text.slice(last, match.index!)) + match[0];
-    last = match.index! + match[0].length;
+    result += transform(text.slice(last, match.index)) + match[0];
+    last = match.index + match[0].length;
   }
   return result + transform(text.slice(last));
 }
@@ -61,7 +61,7 @@ export function blueskyContent(content: string): { text: string; images: Bluesky
     .replace(/%%[\s\S]*?(?:%%|$)/g, "")
     .replace(/^\[\^[^\]\n]+\]:.*(?:\n[ \t]+.*)*$/gm, "");
   // One pass keeps attachments in their written order.
-  text = text.replace(/!\[\[([^\]\n]+)\]\]|!\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+["'][^)]*["'])?\s*\)/g, (_match, wiki: string | undefined, alt = "", href = "") => {
+  text = text.replace(/!\[\[([^\]\n]+)\]\]|!\[([^\]\n]*)\]\(\s*<?([^)\s>]+)>?(?:\s+["'][^)]*["'])?\s*\)/g, (_match: string, wiki: string | undefined, alt: string = "", href: string = "") => {
     if (wiki) {
       const [path, label = ""] = wiki.split("|");
       const clean = path.split("#")[0].trim();
@@ -127,7 +127,7 @@ export function splitBlueskyText(text: string): string[] {
   const starts: number[] = [];
   let length = 0;
   for (const part of parts) { starts.push(length); length += part.length; }
-  const urls = [...text.matchAll(URL_RE)].map(match => [match.index!, match.index! + match[0].length]);
+  const urls = [...text.matchAll(URL_RE)].map(match => [match.index, match.index + match[0].length]);
   const chunks: string[] = [];
   let offset = 0;
   while (offset < parts.length) {
@@ -226,7 +226,7 @@ export async function prepareBlueskyImage(raw: ArrayBuffer, mime: string, alt: s
   if (!/^image\/(png|jpeg|webp|gif)$/.test(mime)) throw new Error("Use PNG, JPEG, WebP or GIF images for Bluesky");
   const bitmap = await createImageBitmap(new Blob([raw], { type: mime }));
   try {
-    const canvas = document.createElement("canvas");
+    const canvas = createEl("canvas");
     const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
     canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Cannot prepare the image");
@@ -293,13 +293,13 @@ export function blueskyLinkFacets(text: string): BlueskyFacet[] {
   for (const match of text.matchAll(URL_RE)) {
     const uri = match[0].replace(/[.,!?;:、。！？\]}]+$/, "");
     try { if (!new URL(uri).host) continue; } catch { continue; }
-    const byteStart = utf8Length(text.slice(0, match.index!));
+    const byteStart = utf8Length(text.slice(0, match.index));
     facets.push({ index: { byteStart, byteEnd: byteStart + utf8Length(uri) }, features: [{ $type: "app.bsky.richtext.facet#link", uri }] });
   }
   return facets;
 }
 
-export interface BlueskyApiResponse { status: number; json: any }
+export interface BlueskyApiResponse { status: number; json: unknown }
 export interface BlueskyApi {
   get(path: string, params: Record<string, string>): Promise<BlueskyApiResponse>;
   post(path: string, body: unknown, contentType?: string): Promise<BlueskyApiResponse>;
@@ -307,8 +307,17 @@ export interface BlueskyApi {
 
 interface BlueskyRecord { uri: string; cid: string; value: Record<string, unknown> }
 
+export function blueskyJsonObject(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function recordRef(value: Record<string, unknown> | null): { uri: string; cid: string } | null {
+  return value && typeof value.uri === "string" && value.uri && typeof value.cid === "string" && value.cid
+    ? { uri: value.uri, cid: value.cid } : null;
+}
+
 function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(item => canonicalJson(item)).join(",")}]`;
+  if (Array.isArray(value)) return `[${value.map((item: unknown) => canonicalJson(item)).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.keys(value as Record<string, unknown>).sort().map(key => `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`).join(",")}}`;
   }
@@ -335,8 +344,10 @@ export async function publishBlueskyPosts(api: BlueskyApi, did: string, posts: B
     let record: BlueskyRecord;
     const existing = await api.get("com.atproto.repo.getRecord", { repo: did, collection: "app.bsky.feed.post", rkey: key });
     if (existing.status === 401) throw new Error("Reconnect Bluesky");
-    if (existing.status !== 200 || !existing.json?.uri || !existing.json?.cid) {
-      const error = existing.json?.error;
+    const existingJson = blueskyJsonObject(existing.json);
+    const existingRef = recordRef(existingJson);
+    if (existing.status !== 200 || !existingRef) {
+      const error = existingJson?.error;
       if (existing.status !== 400 || error !== "RecordNotFound") {
         throw new Error("Could not verify Bluesky publication. Retry to check before sending again");
       }
@@ -347,20 +358,22 @@ export async function publishBlueskyPosts(api: BlueskyApi, did: string, posts: B
           if (!raw) throw new Error("Could not upload Bluesky image");
           const uploaded = await api.post("com.atproto.repo.uploadBlob", raw.buffer, image.mime);
           if (uploaded.status === 401) throw new Error("Reconnect Bluesky");
-          if (uploaded.status < 200 || uploaded.status >= 300 || !uploaded.json?.blob) throw new Error("Could not upload Bluesky image");
-          images.push({ alt: image.alt, image: uploaded.json.blob });
+          const blob = blueskyJsonObject(blueskyJsonObject(uploaded.json)?.blob);
+          if (uploaded.status < 200 || uploaded.status >= 300 || !blob) throw new Error("Could not upload Bluesky image");
+          images.push({ alt: image.alt, image: blob });
         }
         value.embed = { $type: "app.bsky.embed.images", images };
       }
       value.createdAt = new Date().toISOString();
       const created = await api.post("com.atproto.repo.createRecord", { repo: did, collection: "app.bsky.feed.post", rkey: key, record: value });
       if (created.status === 401) throw new Error("Reconnect Bluesky");
-      if (created.status < 200 || created.status >= 300 || !created.json?.uri || !created.json?.cid) {
+      const createdRef = recordRef(blueskyJsonObject(created.json));
+      if (created.status < 200 || created.status >= 300 || !createdRef) {
         throw new Error("Publication could not be confirmed. Retry the same selection to check before sending again");
       }
-      record = { uri: created.json.uri, cid: created.json.cid, value };
+      record = { ...createdRef, value };
     } else {
-      const found: BlueskyRecord = { uri: existing.json.uri, cid: existing.json.cid, value: existing.json.value ?? {} };
+      const found: BlueskyRecord = { ...existingRef, value: blueskyJsonObject(existingJson?.value) ?? {} };
       const compare: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(found.value)) if (k !== "embed" && k !== "createdAt") compare[k] = v;
       const expected: Record<string, unknown> = {};

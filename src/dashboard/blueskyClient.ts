@@ -3,6 +3,7 @@
 import { requestUrl } from "obsidian";
 import { t } from "src/i18n";
 import type { BlueskyApi, BlueskyApiResponse } from "./bluesky";
+import { blueskyJsonObject } from "./bluesky";
 
 export const DEFAULT_BLUESKY_SERVICE = "https://bsky.social";
 
@@ -44,13 +45,13 @@ async function xrpc(service: string, method: string, path: string, options: { au
     body: typeof options.body === "string" || options.body instanceof ArrayBuffer ? options.body : JSON.stringify(options.body),
     throw: false,
   });
-  let json: any = null;
+  let json: unknown = null;
   try { json = response.json; } catch { json = null; }
   return { status: response.status, json };
 }
 
 function isAuthExpired(response: BlueskyApiResponse): boolean {
-  return response.status === 401 || response.json?.error === "ExpiredToken";
+  return response.status === 401 || blueskyJsonObject(response.json)?.error === "ExpiredToken";
 }
 
 async function createBlueskySession(credentials: BlueskyCredentials): Promise<BlueskySession> {
@@ -58,14 +59,15 @@ async function createBlueskySession(credentials: BlueskyCredentials): Promise<Bl
     body: { identifier: credentials.handle, password: credentials.appPassword },
     contentType: "application/json",
   });
-  if (response.status !== 200 || !response.json?.accessJwt || !response.json?.did) {
+  const json = blueskyJsonObject(response.json);
+  if (response.status !== 200 || !json || typeof json.accessJwt !== "string" || !json.accessJwt || typeof json.did !== "string" || !json.did) {
     throw new Error(t("bluesky.connectError"));
   }
   return {
-    did: response.json.did,
-    handle: response.json.handle || credentials.handle,
-    accessJwt: response.json.accessJwt,
-    refreshJwt: response.json.refreshJwt ?? "",
+    did: json.did,
+    handle: typeof json.handle === "string" && json.handle ? json.handle : credentials.handle,
+    accessJwt: json.accessJwt,
+    refreshJwt: typeof json.refreshJwt === "string" ? json.refreshJwt : "",
   };
 }
 
@@ -106,7 +108,7 @@ export async function connectBluesky(credentials: BlueskyCredentials): Promise<B
       async post(path, body, contentType = "application/json") {
         return withRetry(token => xrpc(credentials.service, "POST", path, {
           auth: token,
-          body: contentType === "application/json" && body !== null && typeof body === "object" ? JSON.stringify(body) : body as string | ArrayBuffer,
+          body: contentType === "application/json" && body !== null && typeof body === "object" ? JSON.stringify(body) : body,
           contentType,
         }));
       },
